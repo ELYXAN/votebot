@@ -2,8 +2,13 @@
 // Farben: Top-Spiele als Einzel-Hue (Marken-Lila), Verteilung als validierte
 // kategoriale Dark-Palette (dataviz-Referenz).
 
-const CAT_COLORS = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
-const CAT_LIGHT = ["#7ab8ff", "#ff8a5c", "#3fd9a0", "#ffc24d", "#ff86b0", "#39d05b", "#b9b0ff", "#ff9a9a"];
+// Clean-Rainbow-Verlauf (identisch zum CSS --grad)
+const GRAD_STOPS = ["#34d6c6", "#4a9eff", "#8b7bff", "#e46fd1", "#ff9a63"];
+function _hx(h) { h = h.replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function _hex(r, g, b) { return "#" + [r, g, b].map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join(""); }
+function _lerp(a, b, t) { const A = _hx(a), B = _hx(b); return _hex(A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t); }
+function rainbowAt(frac) { frac = Math.max(0, Math.min(1, frac)); const n = GRAD_STOPS.length - 1; const x = frac * n; const i = Math.min(Math.floor(x), n - 1); return _lerp(GRAD_STOPS[i], GRAD_STOPS[i + 1], x - i); }
+function lighten(hex, t) { return _lerp(hex, "#ffffff", t); }
 
 // --- gemeinsamer Tooltip ---
 let _tip = null;
@@ -42,8 +47,8 @@ function renderBars(el, items, opts = {}) {
     row.className = "hbar-row";
     const pct = Math.max((d.votes / max) * 100, 2);
     const rank = i + 1;
-    const base = CAT_COLORS[i % CAT_COLORS.length];
-    const light = CAT_LIGHT[i % CAT_LIGHT.length];
+    const base = rainbowAt(data.length > 1 ? i / (data.length - 1) : 0.15);
+    const light = lighten(base, 0.3);
     const fillStyle = `width:${pct}%;background:linear-gradient(90deg,${base},${light});box-shadow:0 0 12px ${base}99`;
     row.innerHTML = `
       <span class="hbar-label" title="${escC(d.name)}"><span class="hbar-rank">${rank}</span>${escC(d.name)}</span>
@@ -112,8 +117,8 @@ function renderRewardDonut(el, byReward) {
 
   const arcs = entries.map(([name, val], i) => {
     const frac = val / total;
-    const base = CAT_COLORS[i % CAT_COLORS.length];
-    const light = CAT_LIGHT[i % CAT_LIGHT.length];
+    const base = rainbowAt(entries.length > 1 ? i / (entries.length - 1) : 0.4);
+    const light = lighten(base, 0.3);
     const dash = Math.max(frac * C - gap, 0.5);
     const seg = `<circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="url(#g${i})"
        stroke-width="${stroke}" stroke-linecap="round"
