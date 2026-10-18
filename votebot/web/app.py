@@ -42,7 +42,7 @@ state = AppState()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logging_setup.set_loop(asyncio.get_running_loop())
-    log.info("Votebot-Dashboard bereit auf http://%s:%d", cfg_mod.WEB_HOST, cfg_mod.WEB_PORT)
+    log.info("Tally-Dashboard bereit auf http://%s:%d", cfg_mod.WEB_HOST, cfg_mod.WEB_PORT)
     # Bot automatisch starten, wenn gewünscht und alles eingerichtet ist.
     if state.cfg.get("autostart_bot") and cfg_mod.is_setup_complete(state.cfg):
         try:
@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI):
     await state.bot.stop()
 
 
-app = FastAPI(title="Votebot", lifespan=lifespan)
+app = FastAPI(title="Tally", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 

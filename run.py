@@ -27,7 +27,7 @@ def main() -> None:
     url = f"http://{cfg_mod.WEB_HOST}:{cfg_mod.WEB_PORT}"
 
     print("=" * 60)
-    print("  Votebot - Twitch Vote Tracker")
+    print("  Tally - Twitch Vote Tracker")
     print(f"  Dashboard: {url}")
     print("  (Zum Beenden hier Strg+C drücken.)")
     print("=" * 60)

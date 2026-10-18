@@ -30,7 +30,7 @@ fi
 mkdir -p "$UNIT_DIR"
 cat > "$UNIT" <<UNIT
 [Unit]
-Description=Votebot - Twitch Vote Tracker Dashboard
+Description=Tally - Twitch Vote Tracker Dashboard
 After=network-online.target
 Wants=network-online.target
 
@@ -51,7 +51,7 @@ systemctl --user daemon-reload
 systemctl --user enable --now votebot.service
 
 echo ""
-echo "✓ Votebot-Dienst installiert und gestartet."
+echo "✓ Tally-Dienst installiert und gestartet (votebot.service)."
 echo "  Dashboard:  http://localhost:17563"
 echo "  Status:     systemctl --user status votebot"
 echo "  Logs:       journalctl --user -u votebot -f"

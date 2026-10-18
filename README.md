@@ -1,7 +1,7 @@
-# 🗳️ Votebot
+# 🗳️ Tally
 
 Ein Twitch-Bot, der **Votes über Kanalpunkte** trackt: Zuschauer lösen eine
-Belohnung ein und nennen ein Spiel, Votebot erkennt den Namen (auch mit Tippfehlern),
+Belohnung ein und nennen ein Spiel, Tally erkennt den Namen (auch mit Tippfehlern),
 trägt den Vote in dein **Google Sheet** ein, sortiert die Rangliste und postet eine
 **Chat-Benachrichtigung**. Optional beantwortet ein **AI-Chat** Zuschauerfragen.
 
@@ -19,7 +19,7 @@ keine Konfigurationsdateien von Hand bearbeiten.
 - **Linux / macOS:** im Terminal `./start.sh` ausführen
 - **Windows:** Doppelklick auf `start.bat`
 
-Beim ersten Start richtet sich Votebot selbst ein (virtuelle Umgebung + Pakete) und
+Beim ersten Start richtet sich Tally selbst ein (virtuelle Umgebung + Pakete) und
 öffnet anschließend automatisch das Dashboard unter
 **http://localhost:17563**. Ab dann führt dich der Einrichtungs-Assistent Schritt für
 Schritt durch alles Weitere.
@@ -38,22 +38,22 @@ Der Wizard führt dich Schritt für Schritt – jeder wird direkt im Browser erl
    die Anmeldung wird automatisch zurückgeleitet.
 3. **Chat-Account wählen** – Benachrichtigungen über deinen eigenen Account oder einen
    separaten Bot-Account.
-4. **Belohnungen anlegen** – Votebot erstellt die Kanalpunkte-Belohnungen (Normaler Vote,
+4. **Belohnungen anlegen** – Tally erstellt die Kanalpunkte-Belohnungen (Normaler Vote,
    Super Vote, …) direkt auf deinem Kanal. Namen, Kosten und Vote-Gewicht sind einstellbar.
 5. **Google Sheet verbinden** – Service-Account-JSON hochladen, Sheet-Link eintragen,
    Verbindung testen. Fertig.
 6. **AI-Chat (optional)** – OpenAI-Key hinterlegen oder überspringen.
 
-> 💡 **Warum legt Votebot die Belohnungen selbst an?** Twitch erlaubt es nur, Belohnungen
+> 💡 **Warum legt Tally die Belohnungen selbst an?** Twitch erlaubt es nur, Belohnungen
 > über die API als „erledigt" zu markieren, wenn sie von *derselben* App erstellt wurden.
-> Deshalb erstellt Votebot sie für dich – manuell im Dashboard angelegte Belohnungen
+> Deshalb erstellt Tally sie für dich – manuell im Dashboard angelegte Belohnungen
 > ließen sich nicht verwalten.
 
 ---
 
 ## 🎁 Zwei Betriebsmodi: Entwickler vs. End-User
 
-Votebot erkennt automatisch zwei Modi:
+Tally erkennt automatisch zwei Modi:
 
 - **Entwickler-Modus** (bei dir): kein `app_credentials.json` vorhanden → der volle Wizard
   inkl. Twitch-Developer-Console-Schritt wird angezeigt. Dieser Modus ist nur für dich gedacht,
@@ -65,7 +65,7 @@ Votebot erkennt automatisch zwei Modi:
 
 ### Eine Version zum Weitergeben erstellen
 
-1. Richte Votebot bei dir im **Entwickler-Modus** vollständig ein (Twitch-App + Google Sheets).
+1. Richte Tally bei dir im **Entwickler-Modus** vollständig ein (Twitch-App + Google Sheets).
 2. Geh im Wizard zum letzten Schritt „Fertig" → **„Version für Weitergabe erstellen"** →
    Haken bei „Service-Account mitliefern" → **app_credentials.json erzeugen**.
 3. Gib den Ordner weiter – **mit** `app_credentials.json`, `service_account.json` und `votebot/`,
@@ -96,7 +96,7 @@ Nach der Einrichtung bietet das Dashboard:
 ## 📄 Google Sheet
 
 - Spalte **A** = Votes (Zahl), Spalte **B** = Spielname
-- Bei einem leeren Blatt legt Votebot die Kopfzeile selbst an
+- Bei einem leeren Blatt legt Tally die Kopfzeile selbst an
 - Das Sheet muss mit der **E-Mail des Service-Accounts** geteilt werden
   (als *Bearbeiter*). Die E-Mail zeigt dir der Wizard nach dem JSON-Upload an.
 

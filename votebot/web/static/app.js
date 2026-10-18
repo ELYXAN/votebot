@@ -144,7 +144,7 @@ async function createReward() {
 }
 
 async function removeReward(id) {
-  if (!confirm("Belohnung aus Votebot entfernen? (Die Twitch-Belohnung bleibt bestehen.)")) return;
+  if (!confirm("Belohnung aus Tally entfernen? (Die Twitch-Belohnung bleibt bestehen.)")) return;
   try { await api(`/api/rewards/${encodeURIComponent(id)}`, "DELETE"); }
   catch (e) { alert(e.message); }
 }
