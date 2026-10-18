@@ -57,6 +57,8 @@ async def exchange_code(session: aiohttp.ClientSession, cfg: dict, account: str,
     cfg[account]["access_token"] = body["access_token"]
     cfg[account]["refresh_token"] = body.get("refresh_token", "")
     cfg[account]["token_expiry"] = cfg_mod.token_expiry_iso(body.get("expires_in", 3600))
+    # Tatsächlich erteilte Scopes festhalten (für Warnungen bei fehlenden Rechten).
+    cfg[account]["granted_scopes"] = body.get("scope", [])
 
     # User-Info direkt mitziehen (user_id + login).
     info = await get_user_info(session, cfg, body["access_token"])
@@ -190,9 +192,13 @@ async def send_chat_message(session: aiohttp.ClientSession, cfg: dict, message: 
             log.warning("Chat-Nachricht abgelehnt: %s", data.get("drop_reason"))
             return False
         text = await resp.text()
-        log.error("Chat-Senden fehlgeschlagen (%s): %s", resp.status, text)
-        if "Missing scope" in text:
-            log.error("-> Dem Account fehlt der Scope 'user:write:chat'. Bitte neu anmelden.")
+        if "user:write:chat" in text or "Missing scope" in text:
+            log.error(
+                "Chat-Senden fehlgeschlagen: dem sendenden Account fehlt die Chat-Berechtigung. "
+                "Bitte in der Einrichtung den Account unter 'Chat-Benachrichtigungen' NEU anmelden."
+            )
+        else:
+            log.error("Chat-Senden fehlgeschlagen (%s): %s", resp.status, text)
         return False
 
 

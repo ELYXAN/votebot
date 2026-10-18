@@ -35,7 +35,9 @@ WEB_PORT = 17563
 REDIRECT_URI = f"http://{WEB_HOST}:{WEB_PORT}/oauth/callback"
 
 # Scopes pro Account-Typ.
-BROADCASTER_SCOPES = "channel:read:redemptions channel:manage:redemptions"
+# Der Broadcaster kann (im Standardmodus) auch den Chat bedienen, daher braucht
+# sein Token zusätzlich die Chat-Schreib-Scopes.
+BROADCASTER_SCOPES = "channel:read:redemptions channel:manage:redemptions user:write:chat user:bot"
 CHAT_BOT_SCOPES = "user:write:chat user:bot chat:edit"
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -49,6 +51,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "refresh_token": "",
         "token_expiry": "",
         "scopes": BROADCASTER_SCOPES,
+        "granted_scopes": [],
     },
     "chat_bot": {
         "use_broadcaster": True,  # Chat über den Broadcaster-Account senden
@@ -58,6 +61,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "refresh_token": "",
         "token_expiry": "",
         "scopes": CHAT_BOT_SCOPES,
+        "granted_scopes": [],
     },
     # Liste statt fixer Keys -> jederzeit erweiterbar.
     # kind: "vote" (zählt ins Sheet) oder "ai" (OpenAI-Antwort im Chat).
@@ -212,6 +216,10 @@ def load_config() -> dict:
     cfg = _deep_merge_defaults(loaded, DEFAULT_CONFIG)
     # redirect_uri immer auf aktuellen Wert ziehen (Port könnte sich geändert haben).
     cfg["redirect_uri"] = REDIRECT_URI
+    # Scopes sind von der App vorgegeben, nicht vom Nutzer -> immer aktualisieren,
+    # damit ein erneuter Login die neuesten Berechtigungen anfordert.
+    cfg["broadcaster"]["scopes"] = BROADCASTER_SCOPES
+    cfg["chat_bot"]["scopes"] = CHAT_BOT_SCOPES
     _apply_bundle(cfg)
     save_config(cfg)
     return cfg
@@ -264,6 +272,19 @@ def is_chat_ready(cfg: dict) -> bool:
     return bool(cfg.get("chat_bot", {}).get("access_token"))
 
 
+def chat_send_account(cfg: dict) -> str:
+    return "broadcaster" if cfg.get("chat_bot", {}).get("use_broadcaster") else "chat_bot"
+
+
+def chat_scope_ok(cfg: dict) -> bool:
+    """True, wenn das Konto, das in den Chat schreibt, den Scope 'user:write:chat'
+    tatsächlich erteilt bekommen hat."""
+    acc = cfg.get(chat_send_account(cfg), {})
+    if not acc.get("access_token"):
+        return False
+    return "user:write:chat" in (acc.get("granted_scopes") or [])
+
+
 def is_sheets_configured(cfg: dict) -> bool:
     s = cfg.get("sheets", {})
     return bool(s.get("spreadsheet_id") and os.path.exists(service_account_path(cfg)))
@@ -285,6 +306,7 @@ def setup_status(cfg: dict) -> dict:
         "twitch_app": is_twitch_app_configured(cfg),
         "broadcaster": is_broadcaster_linked(cfg),
         "chat": is_chat_ready(cfg),
+        "chat_scope": chat_scope_ok(cfg),
         "rewards": len(cfg.get("rewards", [])) > 0,
         "sheets": is_sheets_configured(cfg),
         "openai": bool(cfg.get("openai", {}).get("api_key")),

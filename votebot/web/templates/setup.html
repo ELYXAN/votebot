@@ -114,7 +114,14 @@
           (<a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Anleitung</a>:
           Projekt anlegen → „Google Sheets API" aktivieren → Dienstkonto → Schlüssel (JSON) erstellen).</p>
         <label>1) Service-Account-JSON hochladen</label>
-        <input type="file" id="sa-file" accept="application/json">
+        <label class="file-drop" id="sa-drop">
+          <input type="file" id="sa-file" accept="application/json" onchange="onFilePicked()">
+          <span class="fd-icon">📄</span>
+          <span class="fd-text">
+            <span class="fd-title">Datei auswählen…</span>
+            <span class="fd-name" id="sa-fname">JSON aus der Google Cloud Console</span>
+          </span>
+        </label>
         <div class="row mt">
           <button onclick="uploadServiceAccount()" class="secondary">Hochladen</button>
           <span id="sa-status" class="muted"></span>

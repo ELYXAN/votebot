@@ -45,7 +45,12 @@ class VoteBot:
         self.running = False
         self._tasks: list[asyncio.Task] = []
         self.recent_votes: list[dict] = []
-        self.stats = {"votes_processed": 0, "ai_answered": 0, "started_at": None}
+        self.stats = {
+            "votes_processed": 0,
+            "ai_answered": 0,
+            "started_at": None,
+            "votes_by_reward": {},
+        }
 
     # --- Lebenszyklus ----------------------------------------------------
     async def start(self) -> None:
@@ -194,6 +199,8 @@ class VoteBot:
         await self._notify_vote(session, user, match, result)
 
         self.stats["votes_processed"] += 1
+        label = data.get("reward_title") or ("Manuell" if kind == "manual" else "Vote")
+        self.stats["votes_by_reward"][label] = self.stats["votes_by_reward"].get(label, 0) + 1
         self._record_vote(user, match, result)
         await self._finish_redemption(session, kind, reward_id, vote_id)
 

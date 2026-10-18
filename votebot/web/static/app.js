@@ -43,7 +43,12 @@ function applyStatus(s) {
   $("st-queue").textContent = bot.queue_size || 0;
   $("st-games").textContent = bot.games_count || 0;
 
+  renderRewardDonut($("chart-rewards"), st.votes_by_reward || {});
   renderRewards(s.rewards || []);
+
+  // Warnung, wenn der Chat-Account keine Schreib-Berechtigung hat.
+  const needsReauth = s.status && s.status.chat && !s.status.chat_scope;
+  $("scope-warn").classList.toggle("hidden", !needsReauth);
 
   // Einstellungen vorbefüllen (nur initial, nicht bei jedem Tick überschreiben).
   if (!window._settingsInit) {
@@ -64,19 +69,24 @@ async function toggleBot() {
   btn.disabled = false;
 }
 
-// --- Ranking ---
+// --- Ranking + Top-Spiele-Chart ---
 async function loadStandings() {
   const wrap = $("standings");
-  wrap.innerHTML = '<p class="muted">Lädt…</p>';
+  if (!wrap.dataset.loaded) wrap.innerHTML = '<p class="muted">Lädt…</p>';
   try {
     const { standings } = await api("/api/sheets/standings");
+    renderTopGames($("chart-top"), standings);
+    wrap.dataset.loaded = "1";
     if (!standings.length) { wrap.innerHTML = '<p class="muted">Keine Einträge.</p>'; return; }
     let html = "<table><tr><th>#</th><th>Spiel</th><th>Votes</th></tr>";
     standings.slice(0, 50).forEach(r => {
       html += `<tr><td>${r.rank}</td><td>${esc(r.name)}</td><td>${r.votes}</td></tr>`;
     });
     wrap.innerHTML = html + "</table>";
-  } catch (e) { wrap.innerHTML = `<p class="msg err">${esc(e.message)}</p>`; }
+  } catch (e) {
+    $("chart-top").innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+    if (!wrap.dataset.loaded) wrap.innerHTML = `<p class="msg err">${esc(e.message)}</p>`;
+  }
 }
 
 // --- Manueller Vote ---
@@ -88,6 +98,7 @@ async function manualVote() {
     await api("/api/vote/manual", "POST", { game, count });
     showMsg("msg-mv", `Vote für "${game}" (+${count}) eingereiht.`, "ok");
     $("mv-game").value = "";
+    setTimeout(loadStandings, 2500); // nach Verarbeitung Ranking aktualisieren
   } catch (e) { showMsg("msg-mv", e.message, "err"); }
 }
 
@@ -171,3 +182,4 @@ async function testSheet() {
 // --- Start ---
 connectWS();
 loadStandings();
+setInterval(loadStandings, 20000); // Ranking regelmäßig auffrischen

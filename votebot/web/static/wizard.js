@@ -253,6 +253,18 @@ async function removeReward(id) {
 }
 
 // --- Google Sheets ---
+function onFilePicked() {
+  const file = $("sa-file").files[0];
+  const drop = $("sa-drop");
+  if (file) {
+    $("sa-fname").textContent = file.name;
+    $("sa-drop").querySelector(".fd-title").textContent = "Datei gewählt – jetzt hochladen";
+    drop.classList.add("has-file");
+  } else {
+    drop.classList.remove("has-file");
+  }
+}
+
 async function uploadServiceAccount() {
   const file = $("sa-file").files[0];
   if (!file) return showMsg("msg-sheet", "Bitte zuerst eine Datei wählen.", "err");
