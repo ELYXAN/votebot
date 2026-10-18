@@ -34,7 +34,7 @@ function applyStatus(s) {
   const pill = $("bot-pill");
   pill.className = "pill " + (running ? "run" : "stop");
   pill.innerHTML = `<span class="dot ${running ? "ok" : "off"}"></span> ${running ? "läuft" : "gestoppt"}`;
-  $("btn-toggle").textContent = running ? "Stoppen" : "Starten";
+  $("btn-toggle").textContent = running ? "⏸ Stoppen" : "▶ Starten";
   $("channel-label").textContent = s.broadcaster.login ? "Kanal: " + s.broadcaster.login : "";
 
   const st = bot.stats || {};

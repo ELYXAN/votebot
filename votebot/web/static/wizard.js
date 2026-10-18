@@ -24,8 +24,15 @@ const PRESETS = [
 function domStep() { return activeSteps[pos]; }
 
 function stepDone(dom) {
+  // Für Navigation/Gating: optionale Schritte (AI, Fertig) gelten als "passierbar".
   const s = stateCache.status;
   return { 0: s.twitch_app, 1: s.broadcaster, 2: s.chat, 3: s.rewards, 4: s.sheets, 5: true, 6: true }[dom];
+}
+
+function chipDone(dom) {
+  // Für die Chip-Markierung: echter Abschluss-Status.
+  const s = stateCache.status;
+  return { 0: s.twitch_app, 1: s.broadcaster, 2: s.chat, 3: s.rewards, 4: s.sheets, 5: s.openai, 6: s.complete }[dom];
 }
 
 function canReachPos(j) {
@@ -41,7 +48,7 @@ function renderSteps() {
   wrap.innerHTML = "";
   activeSteps.forEach((dom, i) => {
     const chip = document.createElement("div");
-    chip.className = "step-chip" + (i === pos ? " active" : "") + (stepDone(dom) ? " done" : "");
+    chip.className = "step-chip" + (i === pos ? " active" : "") + (chipDone(dom) ? " done" : "");
     chip.innerHTML = `<span>${i + 1}</span> ${esc(ALL_LABELS[dom])}`;
     chip.onclick = () => gotoPos(i);
     wrap.appendChild(chip);
