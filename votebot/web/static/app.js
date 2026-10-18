@@ -44,6 +44,7 @@ function applyStatus(s) {
   $("st-games").textContent = bot.games_count || 0;
 
   renderRewardDonut($("chart-rewards"), st.votes_by_reward || {});
+  renderSessionTop($("chart-session"), st.votes_by_game || {});
   renderRewards(s.rewards || []);
 
   // Warnung, wenn der Chat-Account keine Schreib-Berechtigung hat.
@@ -70,24 +71,20 @@ async function toggleBot() {
   btn.disabled = false;
 }
 
-// --- Ranking + Top-Spiele-Chart ---
+// --- Top-Spiele-Chart (Gesamt, aus dem Sheet) ---
 async function loadStandings() {
-  const wrap = $("standings");
-  if (!wrap.dataset.loaded) wrap.innerHTML = '<p class="muted">Lädt…</p>';
   try {
     const { standings } = await api("/api/sheets/standings");
     renderTopGames($("chart-top"), standings);
-    wrap.dataset.loaded = "1";
-    if (!standings.length) { wrap.innerHTML = '<p class="muted">Keine Einträge.</p>'; return; }
-    let html = "<table><tr><th>#</th><th>Spiel</th><th>Votes</th></tr>";
-    standings.slice(0, 50).forEach(r => {
-      html += `<tr><td>${r.rank}</td><td>${esc(r.name)}</td><td>${r.votes}</td></tr>`;
-    });
-    wrap.innerHTML = html + "</table>";
   } catch (e) {
+    $("chart-top").classList.remove("bars");
     $("chart-top").innerHTML = `<div class="empty">${esc(e.message)}</div>`;
-    if (!wrap.dataset.loaded) wrap.innerHTML = `<p class="msg err">${esc(e.message)}</p>`;
   }
+}
+
+async function resetStats() {
+  if (!confirm("Session-Statistiken (Session-Votes, Verteilung, Zähler) zurücksetzen?")) return;
+  try { await api("/api/stats/reset", "POST"); } catch (e) { alert(e.message); }
 }
 
 // --- Manueller Vote ---

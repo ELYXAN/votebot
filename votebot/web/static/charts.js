@@ -24,27 +24,45 @@ function escC(s) {
   return (s == null ? "" : String(s)).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-// --- Top-Spiele: horizontale Balken (Magnitude, ein Hue) ---
-function renderTopGames(el, standings) {
-  if (!standings || !standings.length) {
-    el.innerHTML = '<div class="empty">Noch keine Votes im Sheet.</div>';
+// --- generischer horizontaler Balken-Chart (füllt das Widget vertikal) ---
+function renderBars(el, items, opts = {}) {
+  const count = opts.count || 14;
+  const emptyText = opts.empty || "Noch keine Daten.";
+  if (!items || !items.length) {
+    el.classList.remove("bars");
+    el.innerHTML = `<div class="empty">${escC(emptyText)}</div>`;
     return;
   }
-  const data = standings.slice(0, 8);
+  const data = items.slice(0, count);
   const max = Math.max(...data.map(d => d.votes), 1);
+  el.classList.add("bars");
   el.innerHTML = "";
-  data.forEach(d => {
+  data.forEach((d, i) => {
     const row = document.createElement("div");
     row.className = "hbar-row";
     const pct = Math.max((d.votes / max) * 100, 2);
+    const rank = i + 1;
     row.innerHTML = `
-      <span class="hbar-label" title="${escC(d.name)}">${escC(d.name)}</span>
+      <span class="hbar-label" title="${escC(d.name)}"><span class="hbar-rank">${rank}</span>${escC(d.name)}</span>
       <div class="hbar-track"><div class="hbar-fill" style="width:${pct}%"></div></div>
       <span class="hbar-val">${d.votes}</span>`;
-    row.addEventListener("mousemove", (ev) => showTip(ev, `<b>#${d.rank} ${escC(d.name)}</b><br>${d.votes} Votes`));
+    row.addEventListener("mousemove", (ev) => showTip(ev, `<b>#${rank} ${escC(d.name)}</b><br>${d.votes} ${opts.unit || "Votes"}`));
     row.addEventListener("mouseleave", hideTip);
     el.appendChild(row);
   });
+}
+
+// Top-Spiele (Gesamt, aus dem Sheet)
+function renderTopGames(el, standings) {
+  renderBars(el, (standings || []).map(s => ({ name: s.name, votes: s.votes })),
+    { count: 15, empty: "Noch keine Votes im Sheet." });
+}
+
+// Meistgevotete Spiele dieser Session/Stream (aus bot.stats.votes_by_game)
+function renderSessionTop(el, byGame) {
+  const items = Object.entries(byGame || {}).map(([name, votes]) => ({ name, votes }))
+    .sort((a, b) => b.votes - a.votes);
+  renderBars(el, items, { count: 15, empty: "Noch keine Votes in dieser Session." });
 }
 
 // --- Verteilung nach Belohnung: futuristischer Donut (kategorial) ---

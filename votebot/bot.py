@@ -50,7 +50,17 @@ class VoteBot:
             "ai_answered": 0,
             "started_at": None,
             "votes_by_reward": {},
+            "votes_by_game": {},  # Session: Summe der Vote-Gewichte pro Spiel
         }
+
+    def reset_session_stats(self) -> None:
+        """Setzt die Session-Statistiken zurück (z. B. zu Stream-Beginn)."""
+        self.stats["votes_processed"] = 0
+        self.stats["ai_answered"] = 0
+        self.stats["votes_by_reward"] = {}
+        self.stats["votes_by_game"] = {}
+        self.recent_votes = []
+        log.info("Session-Statistiken zurückgesetzt.")
 
     # --- Lebenszyklus ----------------------------------------------------
     async def start(self) -> None:
@@ -201,6 +211,7 @@ class VoteBot:
         self.stats["votes_processed"] += 1
         label = data.get("reward_title") or ("Manuell" if kind == "manual" else "Vote")
         self.stats["votes_by_reward"][label] = self.stats["votes_by_reward"].get(label, 0) + 1
+        self.stats["votes_by_game"][match] = self.stats["votes_by_game"].get(match, 0) + weight
         self._record_vote(user, match, result)
         await self._finish_redemption(session, kind, reward_id, vote_id)
 

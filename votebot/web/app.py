@@ -350,6 +350,12 @@ async def bot_stop():
     return {"ok": True, "running": state.bot.running}
 
 
+@app.post("/api/stats/reset")
+async def stats_reset():
+    state.bot.reset_session_stats()
+    return {"ok": True}
+
+
 @app.post("/api/vote/manual")
 async def vote_manual(payload: dict):
     game = (payload.get("game") or "").strip()

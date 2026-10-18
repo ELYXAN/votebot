@@ -33,25 +33,25 @@
 
     <!-- Übersicht: Charts + Ranking -->
     <div class="dash">
-      <div class="card span-5 fill">
-        <div class="row between"><h2>Top-Spiele</h2><button class="small secondary" onclick="loadStandings()">↻</button></div>
+      <div class="card span-4 fill flexcol">
+        <div class="row between"><h2>Top-Spiele · Gesamt</h2><button class="small secondary" onclick="loadStandings()" title="Aus dem Google Sheet aktualisieren">↻</button></div>
         <div class="chart" id="chart-top"></div>
       </div>
 
-      <div class="card span-4 fill">
-        <h2>Vote-Verteilung</h2>
-        <div class="chart" id="chart-rewards"></div>
+      <div class="card span-4 fill flexcol">
+        <div class="row between"><h2>Meistgevotet · Session</h2><button class="small ghost" onclick="resetStats()" title="Session-Statistiken zurücksetzen (z. B. zu Stream-Beginn)">↺ Reset</button></div>
+        <div class="chart" id="chart-session"></div>
       </div>
 
-      <div class="card span-3 fill">
-        <h2>Ranking</h2>
-        <div class="ranking-scroll" id="standings"><p class="muted">Noch nicht geladen.</p></div>
+      <div class="card span-4 fill flexcol">
+        <h2>Vote-Verteilung</h2>
+        <div class="chart" id="chart-rewards"></div>
       </div>
     </div>
 
     <!-- Log + Seitenspalte -->
     <div class="dash" style="margin-top:1.1rem">
-      <div class="card span-8 fill">
+      <div class="card span-8 fill flexcol">
         <div class="row between"><h2>Live-Log</h2><button class="small ghost" onclick="clearLog()">Leeren</button></div>
         <div class="log" id="log"></div>
       </div>
