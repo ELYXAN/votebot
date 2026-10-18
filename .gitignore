@@ -1,6 +1,8 @@
 # Zugangsdaten / Secrets – NIEMALS ins Repo
 config.json
 service_account.json
+# Alter Google-Service-Account-Dateiname (echter Schlüssel) – nie committen
+Vote tracking.json
 # Bundle enthält dein Twitch-Secret. Nicht committen – für die Weitergabe
 # wird es manuell in den verteilten Ordner kopiert.
 app_credentials.json

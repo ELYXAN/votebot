@@ -3,6 +3,7 @@
 // kategoriale Dark-Palette (dataviz-Referenz).
 
 const CAT_COLORS = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
+const CAT_LIGHT = ["#7ab8ff", "#ff8a5c", "#3fd9a0", "#ffc24d", "#ff86b0", "#39d05b", "#b9b0ff", "#ff9a9a"];
 
 // --- gemeinsamer Tooltip ---
 let _tip = null;
@@ -46,7 +47,7 @@ function renderTopGames(el, standings) {
   });
 }
 
-// --- Verteilung nach Belohnung: Donut (kategorial) ---
+// --- Verteilung nach Belohnung: futuristischer Donut (kategorial) ---
 function renderRewardDonut(el, byReward) {
   const entries = Object.entries(byReward || {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   const total = entries.reduce((s, [, v]) => s + v, 0);
@@ -55,39 +56,50 @@ function renderRewardDonut(el, byReward) {
     return;
   }
 
-  const size = 150, stroke = 22, r = (size - stroke) / 2, cx = size / 2, C = 2 * Math.PI * r;
+  const size = 230, stroke = 26, cx = size / 2, r = (size - stroke) / 2 - 6, C = 2 * Math.PI * r;
+  const gap = entries.length > 1 ? C * 0.012 : 0; // kleine Lücke zwischen Segmenten
   let offset = 0;
+
   const arcs = entries.map(([name, val], i) => {
     const frac = val / total;
-    const color = CAT_COLORS[i % CAT_COLORS.length];
-    const dash = frac * C;
-    // 2px Lücke zwischen Segmenten (surface gap).
-    const gap = total > 1 && entries.length > 1 ? 2 : 0;
-    const seg = `<circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="${color}"
-       stroke-width="${stroke}" stroke-dasharray="${Math.max(dash - gap, 0.5)} ${C - Math.max(dash - gap, 0.5)}"
-       stroke-dashoffset="${-offset}" data-i="${i}"></circle>`;
-    offset += dash;
-    return { seg, name, val, color, frac };
+    const base = CAT_COLORS[i % CAT_COLORS.length];
+    const light = CAT_LIGHT[i % CAT_LIGHT.length];
+    const dash = Math.max(frac * C - gap, 0.5);
+    const seg = `<circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="url(#g${i})"
+       stroke-width="${stroke}" stroke-linecap="round"
+       stroke-dasharray="${dash} ${C - dash}" stroke-dashoffset="${-offset}"
+       data-i="${i}" style="filter: drop-shadow(0 0 7px ${base}cc)"></circle>`;
+    offset += frac * C;
+    return { seg, name, val, base, light, frac };
   });
 
+  const defs = arcs.map((a, i) =>
+    `<linearGradient id="g${i}" x1="0%" y1="0%" x2="100%" y2="100%">
+       <stop offset="0%" stop-color="${a.base}"/><stop offset="100%" stop-color="${a.light}"/>
+     </linearGradient>`).join("");
+
   const legend = arcs.map(a =>
-    `<div class="li"><span class="sw" style="background:${a.color}"></span>
+    `<div class="li"><span class="sw" style="color:${a.light};background:${a.base}"></span>
        <span class="ln">${escC(a.name)}</span>
        <span class="lv">${a.val} · ${Math.round(a.frac * 100)}%</span></div>`).join("");
 
   el.innerHTML = `
     <div class="donut-wrap">
-      <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="transform:rotate(-90deg)">
-        ${arcs.map(a => a.seg).join("")}
-        <text x="${cx}" y="${cx}" text-anchor="middle" dominant-baseline="central"
-          transform="rotate(90 ${cx} ${cx})" fill="var(--text)" font-size="26" font-weight="600">${total}</text>
-        <text x="${cx}" y="${cx + 20}" text-anchor="middle" dominant-baseline="central"
-          transform="rotate(90 ${cx} ${cx})" fill="var(--muted)" font-size="10">Votes</text>
+      <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+        <defs>${defs}</defs>
+        <circle cx="${cx}" cy="${cx}" r="${r + stroke / 2 + 4}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+        <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="${stroke}"/>
+        <circle cx="${cx}" cy="${cx}" r="${r - stroke / 2 - 4}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+        <g transform="rotate(-90 ${cx} ${cx})">${arcs.map(a => a.seg).join("")}</g>
+        <text x="${cx}" y="${cx - 6}" text-anchor="middle" dominant-baseline="central"
+          fill="#fff" font-size="46" font-weight="700" style="text-shadow:0 0 20px rgba(120,180,255,0.5)">${total}</text>
+        <text x="${cx}" y="${cx + 24}" text-anchor="middle" dominant-baseline="central"
+          fill="var(--muted)" font-size="11" letter-spacing="2">VOTES</text>
       </svg>
       <div class="legend">${legend}</div>
     </div>`;
 
-  el.querySelectorAll("circle").forEach((c) => {
+  el.querySelectorAll("g circle").forEach((c) => {
     const a = arcs[Number(c.dataset.i)];
     c.style.cursor = "pointer";
     c.addEventListener("mousemove", (ev) => showTip(ev, `<b>${escC(a.name)}</b><br>${a.val} Votes · ${Math.round(a.frac * 100)}%`));
