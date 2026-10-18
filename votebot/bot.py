@@ -51,6 +51,7 @@ class VoteBot:
             "started_at": None,
             "votes_by_reward": {},
             "votes_by_game": {},  # Session: Summe der Vote-Gewichte pro Spiel
+            "voters": {},         # Session: pro User {count, weight, games:{game:weight}}
         }
 
     def reset_session_stats(self) -> None:
@@ -59,6 +60,7 @@ class VoteBot:
         self.stats["ai_answered"] = 0
         self.stats["votes_by_reward"] = {}
         self.stats["votes_by_game"] = {}
+        self.stats["voters"] = {}
         self.recent_votes = []
         log.info("Session-Statistiken zurückgesetzt.")
 
@@ -212,6 +214,10 @@ class VoteBot:
         label = data.get("reward_title") or ("Manuell" if kind == "manual" else "Vote")
         self.stats["votes_by_reward"][label] = self.stats["votes_by_reward"].get(label, 0) + 1
         self.stats["votes_by_game"][match] = self.stats["votes_by_game"].get(match, 0) + weight
+        voter = self.stats["voters"].setdefault(str(user), {"count": 0, "weight": 0, "games": {}})
+        voter["count"] += 1
+        voter["weight"] += weight
+        voter["games"][match] = voter["games"].get(match, 0) + weight
         self._record_vote(user, match, result)
         await self._finish_redemption(session, kind, reward_id, vote_id)
 

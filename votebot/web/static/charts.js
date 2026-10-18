@@ -42,9 +42,12 @@ function renderBars(el, items, opts = {}) {
     row.className = "hbar-row";
     const pct = Math.max((d.votes / max) * 100, 2);
     const rank = i + 1;
+    const base = CAT_COLORS[i % CAT_COLORS.length];
+    const light = CAT_LIGHT[i % CAT_LIGHT.length];
+    const fillStyle = `width:${pct}%;background:linear-gradient(90deg,${base},${light});box-shadow:0 0 12px ${base}99`;
     row.innerHTML = `
       <span class="hbar-label" title="${escC(d.name)}"><span class="hbar-rank">${rank}</span>${escC(d.name)}</span>
-      <div class="hbar-track"><div class="hbar-fill" style="width:${pct}%"></div></div>
+      <div class="hbar-track"><div class="hbar-fill" style="${fillStyle}"></div></div>
       <span class="hbar-val">${d.votes}</span>`;
     row.addEventListener("mousemove", (ev) => showTip(ev, `<b>#${rank} ${escC(d.name)}</b><br>${d.votes} ${opts.unit || "Votes"}`));
     row.addEventListener("mouseleave", hideTip);
@@ -63,6 +66,35 @@ function renderSessionTop(el, byGame) {
   const items = Object.entries(byGame || {}).map(([name, votes]) => ({ name, votes }))
     .sort((a, b) => b.votes - a.votes);
   renderBars(el, items, { count: 15, empty: "Noch keine Votes in dieser Session." });
+}
+
+// Voter dieser Session: wer hat wie oft für welche Spiele gevotet
+function renderVoters(el, voters) {
+  const rows = Object.entries(voters || {}).map(([user, v]) => ({
+    user, count: v.count || 0, weight: v.weight || 0, games: v.games || {},
+  })).sort((a, b) => b.weight - a.weight);
+
+  if (!rows.length) {
+    el.innerHTML = '<div class="empty">Noch keine Voter in dieser Session.</div>';
+    return;
+  }
+
+  const body = rows.map((r, i) => {
+    const games = Object.entries(r.games).sort((a, b) => b[1] - a[1])
+      .map(([g, w]) => `<span class="gchip">${escC(g)} <b>${w}</b></span>`).join(" ");
+    return `<tr>
+      <td class="muted">${i + 1}</td>
+      <td class="vuser">${escC(r.user)}</td>
+      <td style="text-align:right">${r.count}</td>
+      <td style="text-align:right">${r.weight}</td>
+      <td class="vgames">${games}</td>
+    </tr>`;
+  }).join("");
+
+  el.innerHTML = `<table>
+    <tr><th>#</th><th>User</th><th style="text-align:right">Votes</th><th style="text-align:right">Gewicht</th><th>Spiele</th></tr>
+    ${body}
+  </table>`;
 }
 
 // --- Verteilung nach Belohnung: futuristischer Donut (kategorial) ---

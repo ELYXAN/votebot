@@ -284,6 +284,20 @@ td { font-variant-numeric: tabular-nums; }
 tr:last-child td { border-bottom: 0; }
 .ranking-scroll { max-height: 460px; overflow-y: auto; }
 
+/* Voter-Tabelle */
+.voters-scroll { max-height: 340px; overflow-y: auto; margin-top: .3rem; }
+.voters-scroll table { font-size: .88rem; }
+.voters-scroll th:first-child, .voters-scroll td:first-child { width: 2rem; }
+.vuser { font-weight: 600; }
+.vgames { display: flex; flex-wrap: wrap; gap: .35rem; }
+.gchip {
+  display: inline-flex; align-items: center; gap: .3rem;
+  background: rgba(255,255,255,0.06); border: 1px solid var(--edge-soft);
+  border-radius: 999px; padding: .12rem .55rem; font-size: .8rem; color: var(--text-dim);
+}
+.gchip b { color: var(--accent-soft); font-weight: 700; }
+.empty { color: var(--muted); font-size: .88rem; padding: 1.5rem 0; text-align: center; }
+
 /* --- Reward items --- */
 .reward-item {
   display: flex; align-items: center; gap: .6rem; justify-content: space-between;

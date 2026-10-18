@@ -45,6 +45,10 @@ function applyStatus(s) {
 
   renderRewardDonut($("chart-rewards"), st.votes_by_reward || {});
   renderSessionTop($("chart-session"), st.votes_by_game || {});
+  const voters = st.voters || {};
+  renderVoters($("voters"), voters);
+  const vc = Object.keys(voters).length;
+  $("voters-count").textContent = vc ? `${vc} Voter` : "";
   renderRewards(s.rewards || []);
 
   // Warnung, wenn der Chat-Account keine Schreib-Berechtigung hat.
