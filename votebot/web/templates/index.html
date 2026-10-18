@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Votebot – Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <span class="logo">🗳️</span>
+    <h1>Votebot</h1>
+    <span class="pill stop" id="bot-pill"><span class="dot off"></span> gestoppt</span>
+    <span class="spacer"></span>
+    <span class="muted" id="channel-label"></span>
+    <button id="btn-toggle" onclick="toggleBot()">Starten</button>
+    <a href="/setup" class="pill">⚙ Einrichtung</a>
+  </header>
+
+  <div class="container">
+    <div class="card">
+      <div class="stat-row">
+        <div class="stat"><div class="v" id="st-votes">0</div><div class="k">Votes verarbeitet</div></div>
+        <div class="stat"><div class="v" id="st-ai">0</div><div class="k">AI-Antworten</div></div>
+        <div class="stat"><div class="v" id="st-queue">0</div><div class="k">In Warteschlange</div></div>
+        <div class="stat"><div class="v" id="st-games">0</div><div class="k">Spiele im Sheet</div></div>
+      </div>
+    </div>
+
+    <div class="grid cols-2 mt">
+      <div class="card">
+        <div class="row between">
+          <h2>Live-Log</h2>
+          <button class="small ghost" onclick="clearLog()">Leeren</button>
+        </div>
+        <div class="log" id="log"></div>
+      </div>
+
+      <div class="card">
+        <div class="row between">
+          <h2>Ranking</h2>
+          <button class="small secondary" onclick="loadStandings()">Aktualisieren</button>
+        </div>
+        <div id="standings"><p class="muted">Noch nicht geladen.</p></div>
+      </div>
+    </div>
+
+    <div class="grid cols-2 mt">
+      <div class="card">
+        <h2>Manueller Vote</h2>
+        <p class="hint">Reiht einen Vote ein, als käme er über Kanalpunkte (Bot muss laufen).</p>
+        <label>Spielname</label>
+        <input type="text" id="mv-game" placeholder="z. B. Minecraft">
+        <label>Anzahl Votes</label>
+        <input type="number" id="mv-count" value="1" min="1">
+        <div class="row mt"><button onclick="manualVote()">Vote einreihen</button></div>
+        <div class="msg" id="msg-mv"></div>
+      </div>
+
+      <div class="card">
+        <h2>Belohnungen</h2>
+        <p class="hint">Verknüpfte Voting-Belohnungen. Neue jederzeit hinzufügen.</p>
+        <div id="reward-list"></div>
+        <hr class="sep">
+        <h3>Neue Belohnung anlegen</h3>
+        <label>Name</label>
+        <input type="text" id="nr-title" placeholder="z. B. Mega Vote">
+        <div class="row">
+          <div style="flex:1"><label>Typ</label>
+            <select id="nr-kind" onchange="onNewKind()">
+              <option value="vote">Vote (zählt ins Sheet)</option>
+              <option value="ai">AI-Chat</option>
+            </select>
+          </div>
+          <div style="flex:1"><label>Kosten (Punkte)</label><input type="number" id="nr-cost" value="500"></div>
+          <div style="flex:1" id="nr-weight-wrap"><label>Vote-Gewicht</label><input type="number" id="nr-weight" value="5"></div>
+        </div>
+        <div class="row mt"><button onclick="createReward()">Auf Twitch anlegen</button></div>
+        <div class="msg" id="msg-reward"></div>
+      </div>
+    </div>
+
+    <div class="card mt">
+      <h2>Einstellungen</h2>
+      <div class="grid cols-2">
+        <div>
+          <label>Fuzzy-Match-Schwelle (0–100)</label>
+          <input type="number" id="set-score" min="0" max="100" value="80">
+          <small class="note">Höher = strenger. 80 ist ein guter Start.</small>
+          <label>Name für manuelle Votes</label>
+          <input type="text" id="set-manual-user" placeholder="Dashboard">
+          <div class="row mt"><button class="secondary" onclick="saveSettings()">Speichern</button></div>
+          <div class="msg" id="msg-settings"></div>
+        </div>
+        <div>
+          <label>OpenAI-Modell</label>
+          <input type="text" id="set-model" placeholder="gpt-4o">
+          <label>OpenAI API-Key <span class="muted" id="key-set-label"></span></label>
+          <input type="password" id="set-key" placeholder="leer lassen = unverändert">
+          <div class="row mt">
+            <button class="secondary" onclick="saveOpenAI()">AI speichern</button>
+            <button class="ghost" onclick="testSheet()">Sheet-Verbindung testen</button>
+          </div>
+          <div class="msg" id="msg-ai2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/common.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

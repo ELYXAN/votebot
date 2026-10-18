@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Votebot – Einrichtung</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <span class="logo">🗳️</span>
+    <h1>Votebot – Einrichtung</h1>
+    <span class="pill" id="mode-badge"></span>
+    <span class="spacer"></span>
+    <a href="/" id="to-dashboard" class="pill hidden">Zum Dashboard →</a>
+  </header>
+
+  <div class="container">
+    <div class="steps" id="steps"></div>
+
+    <!-- Schritt: Twitch-App (nur Entwickler-Modus) -->
+    <section class="card step" data-step="0">
+      <h2>Twitch-App anlegen</h2>
+      <p class="hint">Votebot braucht eine eigene Twitch-Anwendung (einmalig, kostenlos).
+        Damit bekommt der Bot Zugriff auf deine Kanalpunkte und den Chat.</p>
+      <ol class="muted" style="font-size:.9rem; line-height:1.7">
+        <li>Öffne die <a href="https://dev.twitch.tv/console/apps/create" target="_blank" rel="noopener">Twitch Developer Console</a> und melde dich an.</li>
+        <li>Name frei wählbar, Kategorie z.&nbsp;B. „Application Integration".</li>
+        <li>Trage als <b>OAuth Redirect URL</b> exakt diese Adresse ein:</li>
+      </ol>
+      <div class="code">
+        <span id="redirect-uri">http://localhost:17563/oauth/callback</span>
+        <button class="small secondary" onclick="copyText('redirect-uri')">Kopieren</button>
+      </div>
+      <p class="hint mt">Danach „Create", dann bei der App auf „Manage" → dort findest du die
+        <b>Client-ID</b> und kannst ein <b>Client-Secret</b> erzeugen („New Secret").</p>
+
+      <label>Client-ID</label>
+      <input type="text" id="client_id" placeholder="z. B. abcd1234...">
+      <label>Client-Secret</label>
+      <input type="password" id="client_secret" placeholder="wird sicher lokal gespeichert">
+      <div class="row mt">
+        <button onclick="saveTwitchApp()">Speichern &amp; weiter</button>
+      </div>
+      <div class="msg" id="msg-app"></div>
+    </section>
+
+    <!-- Schritt: Broadcaster-Login -->
+    <section class="card step hidden" data-step="1">
+      <h2>Als Streamer anmelden</h2>
+      <p class="hint">Melde dich mit deinem <b>Streamer-Account</b> (dem Kanal, auf dem die Votes laufen) an.
+        Der Login öffnet sich in einem neuen Fenster – du musst keinen Code kopieren.</p>
+      <div class="row">
+        <button onclick="startOAuth('broadcaster')" id="btn-broadcaster">Mit Twitch anmelden</button>
+        <span class="pill off" id="broadcaster-status"><span class="dot off"></span> nicht verknüpft</span>
+      </div>
+      <div class="msg" id="msg-broadcaster"></div>
+    </section>
+
+    <!-- Schritt: Chat-Account -->
+    <section class="card step hidden" data-step="2">
+      <h2>Chat-Benachrichtigungen</h2>
+      <p class="hint">Über welchen Account sollen die Vote-Nachrichten im Chat gepostet werden?</p>
+      <label><input type="radio" name="chatmode" value="broadcaster" checked onchange="onChatMode()"> Über meinen Streamer-Account (einfachste Variante)</label>
+      <label><input type="radio" name="chatmode" value="bot" onchange="onChatMode()"> Über einen separaten Bot-Account</label>
+      <div id="bot-login" class="mt hidden">
+        <p class="hint">Melde dich jetzt mit dem <b>Bot-Account</b> an (in einem anderen Browser/Inkognito-Tab,
+          damit du nicht als Streamer eingeloggt bist).</p>
+        <div class="row">
+          <button onclick="startOAuth('chat_bot')" class="secondary">Bot-Account anmelden</button>
+          <span class="pill off" id="bot-status"><span class="dot off"></span> nicht verknüpft</span>
+        </div>
+      </div>
+      <div class="msg" id="msg-chat"></div>
+    </section>
+
+    <!-- Schritt: Rewards -->
+    <section class="card step hidden" data-step="3">
+      <h2>Voting-Belohnungen anlegen</h2>
+      <p class="hint">Votebot legt die Kanalpunkte-Belohnungen direkt auf deinem Kanal an.
+        Du kannst Namen und Kosten anpassen – später im Dashboard beliebig weitere ergänzen.</p>
+      <div id="reward-presets"></div>
+      <div class="row mt">
+        <button onclick="createPresetRewards()" id="btn-rewards">Ausgewählte Belohnungen anlegen</button>
+      </div>
+      <div class="msg" id="msg-rewards"></div>
+      <hr class="sep">
+      <h3>Aktuell verknüpfte Belohnungen</h3>
+      <div id="reward-list"><p class="muted">Noch keine.</p></div>
+    </section>
+
+    <!-- Schritt: Google Sheets -->
+    <section class="card step hidden" data-step="4">
+      <h2>Google Sheet verbinden</h2>
+
+      <!-- Variante A: Service-Account wird mitgeliefert (End-User-Modus) -->
+      <div id="sheet-bundled" class="hidden">
+        <p class="hint">Deine Votes werden in deine eigene Google-Tabelle geschrieben – ganz einfach:</p>
+        <ol class="muted" style="font-size:.9rem; line-height:1.7">
+          <li>Erstelle (oder öffne) ein <a href="https://sheets.new" target="_blank" rel="noopener">Google-Sheet</a>.</li>
+          <li>Klick oben rechts auf <b>Freigeben</b> und teile es als <b>Bearbeiter</b> mit dieser E-Mail:</li>
+        </ol>
+        <div class="code">
+          <span id="sa-email">—</span>
+          <button class="small secondary" onclick="copyText('sa-email')">Kopieren</button>
+        </div>
+        <p class="hint mt">Dann unten den Link deines Sheets einfügen.</p>
+      </div>
+
+      <!-- Variante B: eigener Service-Account (Entwickler / nicht gebündelt) -->
+      <div id="sheet-upload">
+        <p class="hint">Die Votes werden in deine Google-Tabelle geschrieben. Dafür brauchst du eine
+          kostenlose <b>Service-Account-JSON</b> aus der Google Cloud Console
+          (<a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Anleitung</a>:
+          Projekt anlegen → „Google Sheets API" aktivieren → Dienstkonto → Schlüssel (JSON) erstellen).</p>
+        <label>1) Service-Account-JSON hochladen</label>
+        <input type="file" id="sa-file" accept="application/json">
+        <div class="row mt">
+          <button onclick="uploadServiceAccount()" class="secondary">Hochladen</button>
+          <span id="sa-status" class="muted"></span>
+        </div>
+        <div class="msg info" id="sa-share"></div>
+      </div>
+
+      <label class="mt">Google-Sheet-Link oder -ID</label>
+      <input type="text" id="spreadsheet_id" placeholder="https://docs.google.com/spreadsheets/d/....">
+      <small class="note">Spalte A = Votes, Spalte B = Spielname. Leeres Blatt? Votebot legt die Kopfzeile selbst an.</small>
+
+      <div class="row mt">
+        <button onclick="saveSheet()" class="secondary">Speichern</button>
+        <button onclick="testSheet()">Verbindung testen</button>
+      </div>
+      <div class="msg" id="msg-sheet"></div>
+    </section>
+
+    <!-- Schritt: AI (optional) -->
+    <section class="card step hidden" data-step="5">
+      <h2>AI-Chat (optional)</h2>
+      <p class="hint">Optional: Mit einem OpenAI-API-Key können Zuschauer per Kanalpunkte-Belohnung
+        Fragen an einen AI-Bot stellen. Kannst du auch überspringen und später aktivieren.</p>
+      <label>OpenAI API-Key</label>
+      <input type="password" id="openai_key" placeholder="sk-... (optional)">
+      <label>Modell</label>
+      <input type="text" id="openai_model" placeholder="gpt-4o" value="gpt-4o">
+      <div class="row mt">
+        <button onclick="saveOpenAI()" class="secondary">Speichern &amp; weiter</button>
+        <button onclick="nextStep()" class="ghost">Überspringen</button>
+      </div>
+      <div class="msg" id="msg-openai"></div>
+    </section>
+
+    <!-- Fertig -->
+    <section class="card step hidden" data-step="6">
+      <h2>✓ Fertig!</h2>
+      <p class="hint">Dein Votebot ist eingerichtet. Im Dashboard kannst du den Bot starten,
+        das Live-Log sehen, Belohnungen verwalten und manuelle Votes abgeben.</p>
+      <div id="final-summary"></div>
+      <div class="row mt">
+        <button onclick="location.href='/'">Zum Dashboard →</button>
+      </div>
+
+      <!-- Entwickler: Weitergabe vorbereiten -->
+      <div id="dev-bundle" class="hidden">
+        <hr class="sep">
+        <h3>🛠️ Version für Weitergabe erstellen</h3>
+        <p class="hint">Erzeugt eine <code>app_credentials.json</code> mit deinen Twitch-App-Daten.
+          End-User, die deine Version nutzen, überspringen dann den Twitch-Developer-Schritt.</p>
+        <label><input type="checkbox" id="bundle-sheets" checked> Meinen Google-Service-Account mitliefern
+          (End-User müssen dann nur ihr Sheet teilen, keine Cloud Console)</label>
+        <div class="row mt">
+          <button class="secondary" onclick="createBundle()">app_credentials.json erzeugen</button>
+          <button class="ghost" onclick="deleteBundle()" id="btn-del-bundle">Bundle entfernen</button>
+        </div>
+        <div class="msg" id="msg-bundle"></div>
+        <div id="bundle-result" class="mt"></div>
+      </div>
+    </section>
+
+    <div class="wizard-nav">
+      <button class="ghost" id="nav-back" onclick="prevStep()">← Zurück</button>
+      <button class="secondary" id="nav-next" onclick="nextStep()">Weiter →</button>
+    </div>
+  </div>
+
+  <script src="/static/common.js"></script>
+  <script src="/static/wizard.js"></script>
+</body>
+</html>

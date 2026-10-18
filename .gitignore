@@ -1,0 +1,18 @@
+# Zugangsdaten / Secrets – NIEMALS ins Repo
+config.json
+service_account.json
+# Bundle enthält dein Twitch-Secret. Nicht committen – für die Weitergabe
+# wird es manuell in den verteilten Ordner kopiert.
+app_credentials.json
+
+# Laufzeitdaten
+Vote_IDs.csv
+inaccurate_games.csv
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Altes Einzelskript (enthält ein hartcodiertes Secret) – nicht auf GitHub
+vote_tracker.py
