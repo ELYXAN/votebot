@@ -177,6 +177,10 @@ a.pill:hover { text-decoration: none; border-color: rgba(255,255,255,0.3); color
   border-radius: 11px; padding: .6rem .8rem; font-family: ui-monospace, monospace;
   font-size: .85rem; word-break: break-all; box-shadow: var(--hi);
 }
+/* Hinweiszeile direkt nach einem Code-Kasten braucht echten Abstand
+   (überschreibt den negativen Top-Margin von .card .hint). */
+.code + p.hint, .code + .hint { margin-top: 1.15rem; }
+ol + .code, p + .code { margin-top: .4rem; }
 
 /* --- KPI-Tiles --- */
 .kpis { display: grid; gap: 1.15rem; margin-bottom: 1.15rem; grid-template-columns: repeat(2, 1fr); }

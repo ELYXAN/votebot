@@ -43,6 +43,13 @@ state = AppState()
 async def lifespan(app: FastAPI):
     logging_setup.set_loop(asyncio.get_running_loop())
     log.info("Votebot-Dashboard bereit auf http://%s:%d", cfg_mod.WEB_HOST, cfg_mod.WEB_PORT)
+    # Bot automatisch starten, wenn gewünscht und alles eingerichtet ist.
+    if state.cfg.get("autostart_bot") and cfg_mod.is_setup_complete(state.cfg):
+        try:
+            await state.bot.start()
+            log.info("Bot automatisch gestartet (autostart_bot aktiv).")
+        except Exception as e:  # noqa: BLE001
+            log.error("Auto-Start des Bots fehlgeschlagen: %s", e)
     yield
     await state.bot.stop()
 
@@ -319,6 +326,8 @@ async def set_settings(payload: dict):
         state.cfg["matching"]["min_match_score"] = int(payload["min_match_score"])
     if "manual_vote_user" in payload:
         state.cfg["manual_vote_user"] = (payload["manual_vote_user"] or "Dashboard").strip()
+    if "autostart_bot" in payload:
+        state.cfg["autostart_bot"] = bool(payload["autostart_bot"])
     cfg_mod.save_config(state.cfg)
     return {"ok": True}
 

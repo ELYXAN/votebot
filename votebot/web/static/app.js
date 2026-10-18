@@ -54,6 +54,7 @@ function applyStatus(s) {
   if (!window._settingsInit) {
     $("set-score").value = (s.matching && s.matching.min_match_score) || 80;
     $("set-manual-user").value = s.manual_vote_user || "Dashboard";
+    $("set-autostart").checked = !!s.autostart_bot;
     $("set-model").value = (s.openai && s.openai.model) || "gpt-4o";
     $("key-set-label").textContent = s.openai && s.openai.api_key_set ? "(gesetzt)" : "(nicht gesetzt)";
     window._settingsInit = true;
@@ -153,8 +154,9 @@ async function saveSettings() {
     await api("/api/settings", "POST", {
       min_match_score: Number($("set-score").value),
       manual_vote_user: $("set-manual-user").value.trim(),
+      autostart_bot: $("set-autostart").checked,
     });
-    showMsg("msg-settings", "Gespeichert. (Greift beim nächsten Vote.)", "ok");
+    showMsg("msg-settings", "Gespeichert.", "ok");
   } catch (e) { showMsg("msg-settings", e.message, "err"); }
 }
 

@@ -3,6 +3,7 @@
 Browser auf dem Dashboard. Für Endnutzer der einzige Einstiegspunkt."""
 from __future__ import annotations
 
+import os
 import threading
 import time
 import webbrowser
@@ -31,7 +32,9 @@ def main() -> None:
     print("  (Zum Beenden hier Strg+C drücken.)")
     print("=" * 60)
 
-    threading.Thread(target=_open_browser, args=(url,), daemon=True).start()
+    # Im Hintergrunddienst (systemd) keinen Browser öffnen.
+    if not os.environ.get("VOTEBOT_NO_BROWSER"):
+        threading.Thread(target=_open_browser, args=(url,), daemon=True).start()
 
     uvicorn.run(
         "votebot.web.app:app",

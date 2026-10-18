@@ -75,6 +75,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "openai": {"api_key": "", "model": "gpt-4o"},
     # Anzeigename für manuell über das Dashboard abgegebene Votes.
     "manual_vote_user": "Dashboard",
+    # Bot automatisch starten, sobald der Server läuft und das Setup komplett ist.
+    "autostart_bot": False,
 }
 
 SECRET_PATHS = (
@@ -357,6 +359,7 @@ def public_state(cfg: dict) -> dict:
             "api_key_set": bool(cfg.get("openai", {}).get("api_key")),
         },
         "manual_vote_user": cfg.get("manual_vote_user", "Dashboard"),
+        "autostart_bot": cfg.get("autostart_bot", False),
         "status": setup_status(cfg),
     }
 
