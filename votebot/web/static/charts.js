@@ -109,7 +109,7 @@ function renderVoters(el, voters) {
   </table>`;
 }
 
-// --- Verteilung nach Belohnung: futuristischer Donut (kategorial) ---
+// --- Verteilung nach Belohnung: schlanker Ring mit großer Zahl in der Mitte ---
 function renderRewardDonut(el, byReward) {
   const entries = Object.entries(byReward || {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   const total = entries.reduce((s, [, v]) => s + v, 0);
@@ -120,53 +120,91 @@ function renderRewardDonut(el, byReward) {
   }
   el.classList.add("donut");
 
-  const size = 230, stroke = 26, cx = size / 2, r = (size - stroke) / 2 - 6, C = 2 * Math.PI * r;
-  const gap = entries.length > 1 ? C * 0.012 : 0; // kleine Lücke zwischen Segmenten
-  let offset = 0;
-
+  const size = 260, cx = size / 2, stroke = 15, r = 108, C = 2 * Math.PI * r;
+  const many = entries.length > 1;
+  // Runde Enden ragen je stroke/2 über den Strich hinaus. Damit sich Segmente
+  // nicht überlappen, wird jedes um Strichbreite + Lücke gekürzt.
+  const trim = many ? stroke + 5 : 0;
+  // Sehr kleine Anteile bekommen eine Mindestlänge, damit sie als eigenes
+  // Segment sichtbar bleiben; die übrigen teilen sich den Rest anteilig.
+  const minSpan = trim + 4;
+  const small = entries.filter(([, v]) => (v / total) * C < minSpan).length;
+  const restTotal = entries.reduce((s, [, v]) => s + ((v / total) * C < minSpan ? 0 : v), 0);
+  let pos = 0;
   const arcs = entries.map(([name, val], i) => {
     const frac = val / total;
-    const base = rainbowAt(entries.length > 1 ? i / (entries.length - 1) : 0.4);
-    const light = lighten(base, 0.3);
-    const dash = Math.max(frac * C - gap, 0.5);
-    const seg = `<circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="url(#g${i})"
-       stroke-width="${stroke}" stroke-linecap="round"
-       stroke-dasharray="${dash} ${C - dash}" stroke-dashoffset="${-offset}"
-       data-i="${i}"></circle>`;
-    offset += frac * C;
-    return { seg, name, val, base, light, frac };
+    const color = rainbowAt(many ? i / (entries.length - 1) : 0.4);
+    const span = !many ? C : (frac * C < minSpan ? minSpan : (val / restTotal) * (C - small * minSpan));
+    const len = Math.max(span - trim, 0.01);
+    const start = pos + (span - len) / 2;
+    pos += span;
+    const pct = frac * 100 < 1 ? "<1%" : Math.round(frac * 100) + "%";
+    return { name, val, frac, color, len, start, pct };
   });
 
-  const defs = arcs.map((a, i) =>
-    `<linearGradient id="g${i}" x1="0%" y1="0%" x2="100%" y2="100%">
-       <stop offset="0%" stop-color="${a.base}"/><stop offset="100%" stop-color="${a.light}"/>
-     </linearGradient>`).join("");
+  const segs = arcs.map((a, i) =>
+    `<circle class="seg" data-i="${i}" cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="${a.color}"
+       stroke-width="${stroke}" stroke-linecap="${many ? "round" : "butt"}"
+       stroke-dasharray="${a.len} ${C - a.len}" stroke-dashoffset="${-a.start}"></circle>`).join("");
 
-  const legend = arcs.map(a =>
-    `<div class="li"><span class="sw" style="background:${a.base}"></span>
-       <span class="ln" title="${escC(a.name)}">${escC(a.name)}</span>
-       <span class="lv">${a.val} · ${Math.round(a.frac * 100)}%</span></div>`).join("");
+  // Zahl so groß wie möglich: Schriftgröße richtet sich nach der Stellenzahl.
+  const digits = String(total).length;
+  const fs = digits <= 2 ? 104 : digits === 3 ? 84 : digits === 4 ? 64 : 50;
+
+  const legend = arcs.map((a, i) =>
+    `<div class="li" data-i="${i}">
+       <div class="lrow">
+         <span class="sw" style="background:${a.color}"></span>
+         <span class="ln" title="${escC(a.name)}">${escC(a.name)}</span>
+         <span class="lv">${a.val}</span>
+         <span class="lp">${a.pct}</span>
+       </div>
+       <div class="lbar"><span style="width:${Math.max(a.frac * 100, 1.5)}%;background:${a.color}"></span></div>
+     </div>`).join("");
 
   el.innerHTML = `
     <div class="donut-wrap">
       <svg viewBox="0 0 ${size} ${size}" role="img" aria-label="Vote-Verteilung nach Belohnung">
-        <defs>${defs}</defs>
-        <circle cx="${cx}" cy="${cx}" r="${r + stroke / 2 + 4}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
-        <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="${stroke}"/>
-        <circle cx="${cx}" cy="${cx}" r="${r - stroke / 2 - 4}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
-        <g transform="rotate(-90 ${cx} ${cx})">${arcs.map(a => a.seg).join("")}</g>
-        <text x="${cx}" y="${cx - 6}" text-anchor="middle" dominant-baseline="central"
-          fill="#fff" font-size="46" font-weight="700" style="text-shadow:0 0 20px rgba(120,180,255,0.5)">${total}</text>
-        <text x="${cx}" y="${cx + 24}" text-anchor="middle" dominant-baseline="central"
-          fill="var(--muted)" font-size="11" letter-spacing="2">VOTES</text>
+        <defs>
+          <linearGradient id="dn-num" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0.1" stop-color="#ffffff"/><stop offset="0.55" stop-color="#dfe5ee"/><stop offset="1" stop-color="#97a2b6"/>
+          </linearGradient>
+          <radialGradient id="dn-disc" cx="50%" cy="22%" r="85%">
+            <stop offset="0" stop-color="#ffffff" stop-opacity="0.16"/>
+            <stop offset="0.55" stop-color="#ffffff" stop-opacity="0.04"/>
+            <stop offset="1" stop-color="#000000" stop-opacity="0.16"/>
+          </radialGradient>
+          <linearGradient id="dn-rim" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>
+            <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.08"/>
+            <stop offset="1" stop-color="#ffffff" stop-opacity="0.28"/>
+          </linearGradient>
+        </defs>
+        <!-- Glasscheibe in der Mitte mit Metallrand -->
+        <circle cx="${cx}" cy="${cx}" r="${r - stroke / 2 - 9}" fill="url(#dn-disc)" stroke="url(#dn-rim)" stroke-width="1"/>
+        <!-- Spur des Rings -->
+        <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="rgba(0,0,0,0.30)" stroke-width="${stroke}"/>
+        <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="${stroke - 2}"/>
+        <g class="segs" transform="rotate(-90 ${cx} ${cx})">${segs}</g>
+        <text class="dn-num" x="${cx}" y="${cx - 4}" text-anchor="middle" dominant-baseline="central"
+          fill="url(#dn-num)" font-size="${fs}">${total}</text>
+        <text class="dn-cap" x="${cx}" y="${cx + fs / 2 + 12}" text-anchor="middle" dominant-baseline="central">VOTES</text>
       </svg>
       <div class="legend">${legend}</div>
     </div>`;
 
-  el.querySelectorAll("g circle").forEach((c) => {
-    const a = arcs[Number(c.dataset.i)];
-    c.style.cursor = "pointer";
-    c.addEventListener("mousemove", (ev) => showTip(ev, `<b>${escC(a.name)}</b><br>${a.val} Votes · ${Math.round(a.frac * 100)}%`));
-    c.addEventListener("mouseleave", hideTip);
+  // Segment und Legendenzeile heben sich gegenseitig hervor.
+  const wrap = el.querySelector(".donut-wrap");
+  const focus = (i) => {
+    wrap.classList.toggle("has-focus", i !== null);
+    wrap.querySelectorAll("[data-i]").forEach(n => n.classList.toggle("on", Number(n.dataset.i) === i));
+  };
+  wrap.querySelectorAll(".seg, .li").forEach((n) => {
+    const i = Number(n.dataset.i), a = arcs[i];
+    n.addEventListener("mouseenter", () => focus(i));
+    n.addEventListener("mouseleave", () => { focus(null); hideTip(); });
+    if (n.classList.contains("seg")) {
+      n.addEventListener("mousemove", (ev) => showTip(ev, `<b>${escC(a.name)}</b><br>${a.val} Votes · ${a.pct}`));
+    }
   });
 }

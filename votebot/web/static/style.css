@@ -142,6 +142,10 @@ button {
   background: var(--grad);
   background-size: 160% 160%;
   background-position: 0% 50%;
+  /* Verlauf ab der Außenkante und ohne Kachelung: sonst wiederholt er sich
+     unter dem 1px-Rand und das andere Verlaufsende blitzt an den Kanten durch. */
+  background-origin: border-box;
+  background-repeat: no-repeat;
   color: #fff;
   border: 1px solid rgba(255,255,255,0.22);
   padding: .66rem 1.25rem;
@@ -296,15 +300,27 @@ ol + .code, p + .code { margin-top: .4rem; }
 .chart-foot .cf b { display: block; font-size: 1.25rem; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 14rem; }
 .chart-foot .cf span { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1.1px; }
 
-/* --- Donut: skaliert mit dem Widget, Legende bricht darunter um --- */
+/* --- Donut: schlanker Ring, große Zahl, Legende mit Anteilsbalken --- */
 .card.flexcol .chart.donut { display: flex; align-items: center; }
-.donut-wrap { display: flex; gap: 1rem 1.6rem; align-items: center; flex-wrap: wrap; justify-content: center; width: 100%; }
-.donut-wrap svg { flex: 0 1 220px; width: 220px; min-width: 150px; max-width: 100%; height: auto; }
-.legend { flex: 1 1 170px; display: flex; flex-direction: column; gap: .55rem; font-size: .88rem; min-width: 0; }
-.legend .li { display: flex; align-items: center; gap: .6rem; min-width: 0; }
-.legend .sw { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; }
+.donut-wrap { display: flex; gap: 1.1rem 1.8rem; align-items: center; flex-wrap: wrap; justify-content: center; width: 100%; }
+.donut-wrap svg { flex: 0 1 250px; width: 250px; min-width: 170px; max-width: 100%; height: auto; overflow: visible; }
+.donut-wrap .seg { cursor: pointer; transition: opacity .18s, stroke-width .18s; filter: drop-shadow(0 0 5px rgba(0,0,0,0.35)); }
+.donut-wrap .dn-num { font-weight: 750; letter-spacing: -3px; font-variant-numeric: tabular-nums; filter: drop-shadow(0 3px 10px rgba(0,0,0,0.45)); }
+.donut-wrap .dn-cap { fill: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 4px; }
+.donut-wrap.has-focus .seg:not(.on) { opacity: .28; }
+.donut-wrap .seg.on { stroke-width: 19px; }
+
+.legend { flex: 1 1 180px; display: flex; flex-direction: column; gap: .2rem; font-size: .9rem; min-width: 0; }
+.legend .li { padding: .42rem .6rem .5rem; border-radius: 11px; border: 1px solid transparent; min-width: 0; transition: background .18s, border-color .18s, opacity .18s; }
+.legend .li.on { background: rgba(255,255,255,0.07); border-color: var(--edge-soft); }
+.donut-wrap.has-focus .legend .li:not(.on) { opacity: .5; }
+.legend .lrow { display: flex; align-items: baseline; gap: .55rem; min-width: 0; }
+.legend .sw { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; align-self: center; }
 .legend .ln { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.legend .lv { color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; padding-left: .6rem; white-space: nowrap; }
+.legend .lv { margin-left: auto; padding-left: .6rem; font-weight: 700; font-size: 1rem; font-variant-numeric: tabular-nums; }
+.legend .lp { min-width: 2.6rem; text-align: right; color: var(--muted); font-size: .82rem; font-variant-numeric: tabular-nums; }
+.legend .lbar { margin-top: .38rem; height: 3px; border-radius: 999px; background: rgba(0,0,0,0.32); overflow: hidden; }
+.legend .lbar span { display: block; height: 100%; border-radius: 999px; }
 
 .viz-tip {
   position: fixed; pointer-events: none; z-index: 60;
