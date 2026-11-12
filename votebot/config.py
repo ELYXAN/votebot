@@ -14,17 +14,22 @@ from datetime import datetime, timedelta
 from typing import Any
 
 # --- Pfade ---------------------------------------------------------------
-# Alle veränderlichen Dateien liegen neben der config.json im Projektordner.
+# BASE_DIR ist der Programmordner. Alle veränderlichen Dateien liegen im
+# DATA_DIR: standardmäßig ebenfalls der Programmordner, bei der installierten
+# Windows-Version ein eigener Ordner (%APPDATA%\Tally, gesetzt über die
+# Umgebungsvariable TALLY_DATA_DIR). So überleben Einstellungen ein Update.
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
-SERVICE_ACCOUNT_FILE = os.path.join(BASE_DIR, "service_account.json")
-VOTE_IDS_FILE = os.path.join(BASE_DIR, "Vote_IDs.csv")
-INACCURATE_GAMES_FILE = os.path.join(BASE_DIR, "inaccurate_games.csv")
+DATA_DIR = os.path.abspath(os.environ.get("TALLY_DATA_DIR") or BASE_DIR)
+os.makedirs(DATA_DIR, exist_ok=True)
+CONFIG_FILE = os.path.join(DATA_DIR, "config.json")
+SERVICE_ACCOUNT_FILE = os.path.join(DATA_DIR, "service_account.json")
+VOTE_IDS_FILE = os.path.join(DATA_DIR, "Vote_IDs.csv")
+INACCURATE_GAMES_FILE = os.path.join(DATA_DIR, "inaccurate_games.csv")
 
 # Bundle-Datei für die Weitergabe: enthält die Twitch-App-Zugangsdaten des
 # Erstellers. Ist sie vorhanden, läuft Votebot im "End-User-Modus" und blendet
 # den Twitch-Developer-Console-Schritt aus (die App wird mitgeliefert).
-BUNDLE_FILE = os.path.join(BASE_DIR, "app_credentials.json")
+BUNDLE_FILE = os.path.join(DATA_DIR, "app_credentials.json")
 
 SCHEMA_VERSION = 2
 
@@ -255,7 +260,7 @@ def service_account_path(cfg: dict) -> str:
     name = cfg.get("sheets", {}).get("service_account_file") or "service_account.json"
     if os.path.isabs(name):
         return name
-    return os.path.join(BASE_DIR, name)
+    return os.path.join(DATA_DIR, name)
 
 
 def is_twitch_app_configured(cfg: dict) -> bool:

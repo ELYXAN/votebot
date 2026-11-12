@@ -4,6 +4,7 @@ Browser auf dem Dashboard. Für Endnutzer der einzige Einstiegspunkt."""
 from __future__ import annotations
 
 import os
+import socket
 import threading
 import time
 import webbrowser
@@ -22,9 +23,25 @@ def _open_browser(url: str) -> None:
         pass
 
 
+def _already_running() -> bool:
+    """True, wenn auf dem Dashboard-Port schon etwas lauscht (Tally läuft bereits)."""
+    try:
+        with socket.create_connection((cfg_mod.WEB_HOST, cfg_mod.WEB_PORT), timeout=1):
+            return True
+    except OSError:
+        return False
+
+
 def main() -> None:
     logging_setup.configure()
     url = f"http://{cfg_mod.WEB_HOST}:{cfg_mod.WEB_PORT}"
+
+    # Zweiter Start (z. B. Doppelklick auf die Verknüpfung): nur das Dashboard öffnen.
+    if _already_running():
+        print(f"Tally läuft bereits - öffne {url}")
+        if not os.environ.get("VOTEBOT_NO_BROWSER"):
+            webbrowser.open(url)
+        return
 
     print("=" * 60)
     print("  Tally - Twitch Vote Tracker")

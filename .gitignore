@@ -18,3 +18,7 @@ __pycache__/
 
 # Altes Einzelskript (enthält ein hartcodiertes Secret) – nicht auf GitHub
 vote_tracker.py
+
+# Build-Ausgaben (Windows-Installer)
+build/
+dist/

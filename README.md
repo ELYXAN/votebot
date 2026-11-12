@@ -26,6 +26,24 @@ Schritt durch alles Weitere.
 
 ---
 
+## 🪟 Windows-Installer
+
+Für Windows (64 Bit) gibt es ein Setup, das Python und alle Abhängigkeiten mitbringt.
+Auf dem Zielrechner muss nichts weiter installiert sein.
+
+Bauen (unter Linux, benötigt `nsis`, `curl`, `unzip`):
+
+```bash
+./packaging/windows/build.sh      # erzeugt dist/Tally-Setup-<Version>.exe
+```
+
+- Installation pro Benutzer nach `%LOCALAPPDATA%\Programs\Tally`, ohne Admin-Rechte.
+- Einstellungen und Zugangsdaten liegen getrennt in `%APPDATA%\Tally` und bleiben bei
+  Updates erhalten. Die Deinstallation fragt, ob sie gelöscht werden sollen.
+- Das Setup enthält **keine** Zugangsdaten. Für eine End-User-Version die Dateien
+  `app_credentials.json` (und ggf. `service_account.json`) nach `%APPDATA%\Tally` legen.
+- Tally läuft in einem minimierten Konsolenfenster. Fenster schließen = Tally beenden.
+
 ## 🧭 Der Einrichtungs-Assistent
 
 Der Wizard führt dich Schritt für Schritt – jeder wird direkt im Browser erledigt.
