@@ -3,6 +3,7 @@ und Chat-Nachrichten. Alle Aufrufe nutzen die eine konfigurierte ``client_id``.
 """
 from __future__ import annotations
 
+import asyncio
 import time
 from datetime import datetime, timedelta
 from typing import Any
@@ -16,6 +17,9 @@ log = get_logger("votebot.twitch")
 
 AUTH_BASE = "https://id.twitch.tv/oauth2/authorize"
 TOKEN_URL = "https://id.twitch.tv/oauth2/token"
+
+# Pro Account eine Sperre, damit ein Token nicht doppelt erneuert wird.
+_refresh_locks: dict[str, asyncio.Lock] = {}
 VALIDATE_URL = "https://id.twitch.tv/oauth2/validate"
 HELIX = "https://api.twitch.tv/helix"
 
@@ -124,11 +128,18 @@ async def refresh_token(session: aiohttp.ClientSession, cfg: dict, account: str)
 
 
 async def ensure_valid_token(session: aiohttp.ClientSession, cfg: dict, account: str) -> bool:
-    """Stellt ein gültiges Token sicher (prüfen + ggf. refreshen). Kein Browser-Flow."""
+    """Stellt ein gültiges Token sicher (prüfen + ggf. refreshen). Kein Browser-Flow.
+
+    Mehrere Tasks (Listener, Chat, Redemption) können gleichzeitig hier ankommen.
+    Die Sperre sorgt dafür, dass ein abgelaufenes Token nur einmal erneuert wird."""
     if check_token_validity(cfg, account):
         return True
-    if cfg.get(account, {}).get("refresh_token"):
-        return await refresh_token(session, cfg, account)
+    lock = _refresh_locks.setdefault(account, asyncio.Lock())
+    async with lock:
+        if check_token_validity(cfg, account):  # ein anderer Task war schneller
+            return True
+        if cfg.get(account, {}).get("refresh_token"):
+            return await refresh_token(session, cfg, account)
     return False
 
 
@@ -302,6 +313,32 @@ async def get_redemptions(
             return []
         log.error("Redemptions lesen fehlgeschlagen (%s): %s", resp.status, await resp.text())
         return []
+
+
+# --- EventSub (Push per WebSocket) ----------------------------------------
+
+EVENTSUB_WS_URL = "wss://eventsub.wss.twitch.tv/ws"
+REDEMPTION_ADD = "channel.channel_points_custom_reward_redemption.add"
+
+
+async def eventsub_subscribe_redemptions(
+    session: aiohttp.ClientSession, cfg: dict, ws_session_id: str
+) -> None:
+    """Abonniert neue Kanalpunkte-Einlösungen des Broadcasters für die
+    WebSocket-Sitzung ``ws_session_id``. Ein Abo deckt alle Belohnungen ab;
+    gefiltert wird im Bot. Wirft ``TwitchError`` bei Fehlschlag."""
+    payload = {
+        "type": REDEMPTION_ADD,
+        "version": "1",
+        "condition": {"broadcaster_user_id": cfg["broadcaster"]["user_id"]},
+        "transport": {"method": "websocket", "session_id": ws_session_id},
+    }
+    async with session.post(
+        f"{HELIX}/eventsub/subscriptions", headers=_broadcaster_headers(cfg, json=True), json=payload
+    ) as resp:
+        if resp.status in (200, 202, 409):  # 409 = Abo besteht bereits
+            return
+        raise TwitchError(f"EventSub-Abo fehlgeschlagen ({resp.status}): {await resp.text()}")
 
 
 async def fulfill_redemption(

@@ -19,6 +19,8 @@ log = get_logger("votebot.sheets")
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 VOTE_COLUMN = "Votes"
 GAME_COLUMN = "Game"
+# Sekunden, die eine gelesene Rangliste fürs Dashboard wiederverwendet wird.
+STANDINGS_TTL = 10.0
 
 
 def service_account_email(cfg: dict) -> str | None:
@@ -47,6 +49,8 @@ class GoogleSheets:
         self.games_list: list[str] = []
         self.last_cache_update: float = 0
         self.cache_validity: int = 300
+        self._standings: list[dict] | None = None
+        self._standings_at: float = 0
 
     @property
     def ready(self) -> bool:
@@ -93,8 +97,17 @@ class GoogleSheets:
         self.last_cache_update = time.time()
         log.info("Spiele-Cache aktualisiert (%d Spiele).", len(self.games_list))
 
-    async def get_standings(self) -> list[dict]:
-        """Liefert [{rank, votes, name}] absteigend nach Votes."""
+    async def get_standings(self, fresh: bool = False) -> list[dict]:
+        """Liefert [{rank, votes, name}] absteigend nach Votes.
+
+        Der Stand wird kurz zwischengespeichert (``STANDINGS_TTL``) und nach jedem
+        verbuchten Vote direkt aktualisiert. So lösen mehrere offene Dashboards
+        oder das Neuladen nach einem Vote keinen eigenen Sheets-Abruf aus.
+        ``fresh=True`` erzwingt das Lesen aus dem Sheet."""
+        if (not fresh and self._standings is not None
+                and time.time() - self._standings_at < STANDINGS_TTL):
+            return [dict(r) for r in self._standings]
+
         def _do():
             data = self.worksheet.get("A2:B", value_render_option="UNFORMATTED_VALUE")
             rows = []
@@ -109,30 +122,52 @@ class GoogleSheets:
 
         rows = await asyncio.to_thread(_do)
         rows.sort(key=lambda x: (-x["votes"], x["name"]))
-        for i, row in enumerate(rows, start=1):
-            row["rank"] = i
-        return rows
+        self._set_standings(rows)
+        return [dict(r) for r in self._standings]
+
+    def _set_standings(self, sorted_rows: list[dict]) -> None:
+        self._standings = [
+            {"votes": g["votes"], "name": g["name"], "rank": i}
+            for i, g in enumerate(sorted_rows, start=1)
+        ]
+        self._standings_at = time.time()
 
     async def register_vote(self, match: str, weight: int) -> dict:
-        """Verbucht einen Vote für ``match``: liest Stand, berechnet neuen Rang,
-        schreibt die Zelle und sortiert das Blatt. Gibt Infos für die Chat-Nachricht
-        zurück (sendet selbst NICHT)."""
+        """Verbucht einen Vote für ``match``: liest Stand, berechnet neuen Rang
+        und schreibt das Ergebnis. Gibt Infos für die Chat-Nachricht zurück
+        (sendet selbst NICHT).
+
+        Pro Vote genau zwei Sheets-Aufrufe (Lesen + Schreiben). Ändert der Vote
+        die Reihenfolge nicht und ist das Blatt bereits sauber sortiert, wird nur
+        die eine Zelle geschrieben; sonst das Blatt sortiert neu geschrieben. Das
+        Ergebnis im Sheet ist in beiden Fällen identisch."""
         def _do():
             data = self.worksheet.get("A2:B", value_render_option="UNFORMATTED_VALUE")
             games = []
             cell_row = None
             current = 0
+            matches = 0
+            # "clean": Das Blatt enthält exakt das, was ein Neuschreiben erzeugen
+            # würde (lückenlos ab Zeile 2, Votes als ganze Zahl, Namen ohne Rand-
+            # Leerzeichen). Nur dann ist das Schreiben einer einzelnen Zelle
+            # gleichwertig zum kompletten Neuschreiben.
+            clean = True
             for idx, r in enumerate(data, start=2):
                 if len(r) >= 2 and str(r[1]).strip():
+                    raw_votes, raw_name = r[0], r[1]
                     try:
-                        v = int(r[0]) if str(r[0]).strip() else 0
+                        v = int(raw_votes) if str(raw_votes).strip() else 0
                     except (ValueError, TypeError):
                         v = 0
-                    name = str(r[1]).strip()
+                    name = str(raw_name).strip()
+                    if (type(raw_votes) is not int or raw_name != name
+                            or idx != len(games) + 2):
+                        clean = False
                     games.append({"votes": v, "name": name})
                     if name == match:
                         cell_row = idx
                         current = v
+                        matches += 1
 
             # Alten Rang bestimmen.
             old_sorted = sorted(games, key=lambda x: (-x["votes"], x["name"]))
@@ -152,33 +187,42 @@ class GoogleSheets:
             new_sorted = sorted(games, key=lambda x: (-x["votes"], x["name"]))
             new_rank = next((i for i, g in enumerate(new_sorted, 1) if g["name"] == match), 0)
 
-            # Zelle schreiben (oder neue Zeile anhängen).
-            if cell_row:
+            if cell_row and clean and matches == 1 and games == new_sorted:
+                # Reihenfolge unverändert: nur die Vote-Zelle schreiben.
                 self.worksheet.update_cell(cell_row, 1, new_votes)
             else:
-                self.worksheet.append_row([new_votes, match])
-
-            # Gesamtes Blatt sortiert zurückschreiben.
-            self._write_sorted(new_sorted)
+                used_rows = len(data)
+                if not cell_row:
+                    # Neues Spiel: Zeile anhängen (erweitert bei Bedarf das Blatt).
+                    self.worksheet.append_row([new_votes, match])
+                    used_rows += 1
+                # Gesamtes Blatt sortiert zurückschreiben. Enthielt es Leer- oder
+                # Restzeilen, werden die übrig bleibenden Zeilen darunter geleert,
+                # damit kein veralteter Eintrag stehen bleibt.
+                self._write_sorted(new_sorted, clear_rows=used_rows - len(new_sorted))
 
             return {
                 "new_votes": new_votes,
                 "added": weight,
                 "rank": new_rank,
                 "old_rank": old_rank,
-                "games": [g["name"] for g in new_sorted],
+                "sorted": new_sorted,
             }
 
         result = await asyncio.to_thread(_do)
-        # Spiele-Cache direkt aus dem neu sortierten Stand aktualisieren.
-        self.games_list = result.pop("games")
+        # Spiele-Cache und Rangliste direkt aus dem neu sortierten Stand aktualisieren.
+        new_sorted = result.pop("sorted")
+        self.games_list = [g["name"] for g in new_sorted]
         self.last_cache_update = time.time()
+        self._set_standings(new_sorted)
         return result
 
-    def _write_sorted(self, sorted_games: list[dict]) -> None:
-        """(läuft bereits im Thread) Schreibt Kopfzeile + sortierte Daten ab A1."""
+    def _write_sorted(self, sorted_games: list[dict], clear_rows: int = 0) -> None:
+        """(läuft bereits im Thread) Schreibt Kopfzeile + sortierte Daten ab A1.
+        ``clear_rows`` leert zusätzlich so viele Zeilen unterhalb der Daten."""
         values = [[VOTE_COLUMN, GAME_COLUMN]]
         values += [[g["votes"], g["name"]] for g in sorted_games]
+        values += [["", ""]] * max(clear_rows, 0)
         end = gspread.utils.rowcol_to_a1(len(values), 2)
         self.worksheet.update(range_name=f"A1:{end}", values=values)
 

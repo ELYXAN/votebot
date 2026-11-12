@@ -33,7 +33,12 @@ function applyStatus(s) {
   running = bot.running;
   const pill = $("bot-pill");
   pill.className = "pill " + (running ? "run" : "stop");
-  pill.innerHTML = `<span class="dot ${running ? "ok" : "off"}"></span> ${running ? "läuft" : "gestoppt"}`;
+  // "Echtzeit" = Votes kommen per Twitch-Push, "Abfrage" = Rückfall auf Sekundentakt.
+  const mode = !running ? "gestoppt" : (bot.push_live ? "läuft · Echtzeit" : "läuft · Abfrage");
+  pill.title = !running ? "" : (bot.push_live
+    ? "Votes kommen in Echtzeit über Twitch EventSub an."
+    : "Echtzeit-Verbindung steht gerade nicht. Votes werden alle 2 Sekunden abgefragt.");
+  pill.innerHTML = `<span class="dot ${running ? "ok" : "off"}"></span> ${mode}`;
   $("btn-toggle").textContent = running ? "⏸ Stoppen" : "▶ Starten";
   $("channel-label").textContent = s.broadcaster.login ? "Kanal: " + s.broadcaster.login : "";
 
@@ -83,9 +88,11 @@ async function toggleBot() {
 }
 
 // --- Top-Spiele-Chart (Gesamt, aus dem Sheet) ---
-async function loadStandings() {
+// fresh=true liest direkt aus dem Sheet (Aktualisieren-Knopf), sonst darf der
+// Server einen wenige Sekunden alten Stand liefern.
+async function loadStandings(fresh = false) {
   try {
-    const { standings } = await api("/api/sheets/standings");
+    const { standings } = await api("/api/sheets/standings" + (fresh ? "?fresh=1" : ""));
     renderTopGames($("chart-top"), standings);
     const voted = (standings || []).filter(s => Number(s.votes) > 0);
     renderFoot($("foot-top"), voted.length ? [

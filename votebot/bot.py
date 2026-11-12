@@ -1,21 +1,29 @@
-"""Kern-Bot: pollt Channel-Point-Redemptions, matcht Spielnamen, verbucht Votes
-im Sheet, sendet Chat-Benachrichtigungen und beantwortet AI-Rewards.
+"""Kern-Bot: empfängt Channel-Point-Redemptions, matcht Spielnamen, verbucht
+Votes im Sheet, sendet Chat-Benachrichtigungen und beantwortet AI-Rewards.
+
+Neue Einlösungen kommen in Echtzeit über Twitch EventSub (WebSocket-Push).
+Die Abfrage der offenen Einlösungen läuft als Sicherheitsnetz weiter: einmal
+direkt nach jedem Verbindungsaufbau (holt alles nach, was währenddessen
+einging), danach in großen Abständen. Fällt der Push aus, wird wie früher im
+Sekundentakt abgefragt. Doppelte Zustellung verhindert ``processed_ids``.
 
 Als start-/stopbare Tasks im laufenden Event-Loop (vom Web-Dashboard gesteuert).
 """
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 
 import aiohttp
-from rapidfuzz import process as fuzz_process
-
-from . import ai, config as cfg_mod, twitch
+from . import ai, config as cfg_mod, matching, twitch
 from .logging_setup import get_logger
 from .sheets import GoogleSheets
 
 log = get_logger("votebot.bot")
+
+# Abstand der Sicherheits-Abfrage, solange der Echtzeit-Push steht (Sekunden).
+SAFETY_POLL_INTERVAL = 30.0
 
 
 def load_processed_ids() -> set[str]:
@@ -44,6 +52,10 @@ class VoteBot:
         self.processed_ids: set[str] = load_processed_ids()
         self.running = False
         self._tasks: list[asyncio.Task] = []
+        # True, solange die EventSub-Verbindung steht und abonniert ist.
+        self.push_live = False
+        # Weckt den Listener sofort für eine Nachhol-Abfrage.
+        self._poll_now = asyncio.Event()
         self.recent_votes: list[dict] = []
         self.stats = {
             "votes_processed": 0,
@@ -79,6 +91,7 @@ class VoteBot:
         self.stats["started_at"] = time.time()
         self._tasks = [
             asyncio.create_task(self._listener(), name="votebot-listener"),
+            asyncio.create_task(self._eventsub(), name="votebot-eventsub"),
             asyncio.create_task(self._processor(), name="votebot-processor"),
         ]
         log.info("Bot läuft - überwache Votes für Kanal '%s'.",
@@ -97,6 +110,7 @@ class VoteBot:
             except asyncio.CancelledError:
                 pass
         self._tasks = []
+        self.push_live = False
         log.info("Bot gestoppt.")
 
     # --- Manueller Vote (vom Dashboard) ----------------------------------
@@ -127,33 +141,28 @@ class VoteBot:
                         await asyncio.sleep(10)
                         continue
 
+                    # Alle Belohnungen gleichzeitig abfragen statt nacheinander.
+                    results = await asyncio.gather(
+                        *(twitch.get_redemptions(session, self.cfg, r["reward_id"]) for r in rewards),
+                        return_exceptions=True,
+                    )
                     found_new = False
-                    for reward in rewards:
+                    for reward, redemptions in zip(rewards, results):
                         rid = reward["reward_id"]
-                        try:
-                            redemptions = await twitch.get_redemptions(session, self.cfg, rid)
-                        except twitch.TwitchError:
+                        if isinstance(redemptions, twitch.TwitchError):
                             break  # Token-Problem -> nächster Zyklus
+                        if isinstance(redemptions, BaseException):
+                            raise redemptions
                         for entry in redemptions:
-                            vid = entry.get("id")
-                            if vid in self.processed_ids:
-                                continue
-                            found_new = True
-                            self.processed_ids.add(vid)
-                            kind = reward.get("kind", "vote")
-                            await self.queue.put({
-                                "entry": entry,
-                                "kind": kind,
-                                "weight": int(reward.get("weight", 1)) if kind == "vote" else 0,
-                                "reward_id": rid,
-                                "reward_title": reward.get("title", ""),
-                            })
-                            log.info("Neuer Vote von %s: '%s' (%s).",
-                                     entry.get("user_name"), entry.get("user_input", ""),
-                                     reward.get("title", kind))
-                        await asyncio.sleep(0.4)
+                            if self._enqueue_redemption(reward, entry):
+                                found_new = True
 
-                    await asyncio.sleep(0.5 if found_new else 2.0)
+                    if self.push_live:
+                        # Push liefert in Echtzeit - nur noch selten nachsehen,
+                        # oder sofort, wenn die Verbindung neu aufgebaut wurde.
+                        await self._wait_poll(SAFETY_POLL_INTERVAL)
+                    else:
+                        await self._wait_poll(0.5 if found_new else 2.0)
                 except aiohttp.ClientConnectorError as e:
                     log.warning("Verbindungsfehler im Listener: %s - warte 15s.", e)
                     await asyncio.sleep(15)
@@ -162,6 +171,128 @@ class VoteBot:
                 except Exception as e:  # noqa: BLE001
                     log.error("Unerwarteter Fehler im Listener: %s", e)
                     await asyncio.sleep(10)
+
+    def _enqueue_redemption(self, reward: dict, entry: dict) -> bool:
+        """Reiht eine Einlösung ein, sofern sie noch nicht gesehen wurde.
+        Gemeinsamer Weg für Push und Abfrage (kein await -> keine Dubletten)."""
+        vid = entry.get("id")
+        if not vid or vid in self.processed_ids:
+            return False
+        self.processed_ids.add(vid)
+        kind = reward.get("kind", "vote")
+        self.queue.put_nowait({
+            "entry": entry,
+            "kind": kind,
+            "weight": int(reward.get("weight", 1)) if kind == "vote" else 0,
+            "reward_id": reward["reward_id"],
+            "reward_title": reward.get("title", ""),
+        })
+        log.info("Neuer Vote von %s: '%s' (%s).",
+                 entry.get("user_name"), entry.get("user_input", ""),
+                 reward.get("title", kind))
+        return True
+
+    async def _wait_poll(self, delay: float) -> None:
+        """Wartet ``delay`` Sekunden oder bis eine Nachhol-Abfrage angefordert wird."""
+        try:
+            await asyncio.wait_for(self._poll_now.wait(), timeout=delay)
+        except asyncio.TimeoutError:
+            pass
+        self._poll_now.clear()
+
+    # --- EventSub (Echtzeit-Push) ----------------------------------------
+    async def _eventsub(self) -> None:
+        """Hält die EventSub-WebSocket-Verbindung und baut sie bei Bedarf neu auf."""
+        url = twitch.EVENTSUB_WS_URL
+        backoff = 2.0
+        async with aiohttp.ClientSession() as session:
+            while self.running:
+                try:
+                    # Kehrt nur zurück, wenn Twitch einen Umzug auf eine neue URL verlangt.
+                    url = await self._eventsub_session(session, url)
+                    backoff = 2.0
+                    continue
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:  # noqa: BLE001
+                    if self.push_live:
+                        log.warning("Echtzeit-Verbindung zu Twitch unterbrochen (%s) - "
+                                    "frage solange im Sekundentakt ab.", str(e) or type(e).__name__)
+                    else:
+                        log.warning("Echtzeit-Verbindung zu Twitch nicht möglich (%s) - "
+                                    "neuer Versuch in %.0fs.", str(e) or type(e).__name__, backoff)
+                self.push_live = False
+                self._poll_now.set()  # Listener sofort auf schnellen Takt umstellen
+                url = twitch.EVENTSUB_WS_URL
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 60.0)
+
+    async def _eventsub_session(self, session: aiohttp.ClientSession, url: str) -> str:
+        """Eine WebSocket-Sitzung. Gibt die neue URL zurück, wenn Twitch einen
+        Verbindungswechsel anfordert; wirft bei Abbruch oder Zeitüberschreitung."""
+        # Bei einem von Twitch angeforderten Wechsel ziehen die Abos automatisch mit.
+        subscribed = url != twitch.EVENTSUB_WS_URL
+        timeout = 20.0
+        ws = await session.ws_connect(url)
+        try:
+            while True:
+                # Twitch sendet mindestens alle ``keepalive_timeout_seconds`` etwas.
+                msg = await asyncio.wait_for(ws.receive(), timeout=timeout)
+                if msg.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.CLOSING,
+                                aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
+                    raise ConnectionError(f"Verbindung geschlossen (Code {ws.close_code})")
+                if msg.type != aiohttp.WSMsgType.TEXT:
+                    continue
+                data = json.loads(msg.data)
+                mtype = data.get("metadata", {}).get("message_type")
+                payload = data.get("payload", {})
+
+                if mtype == "session_welcome":
+                    ws_session = payload.get("session", {})
+                    timeout = float(ws_session.get("keepalive_timeout_seconds") or 10) + 10.0
+                    if not subscribed:
+                        if not await twitch.ensure_valid_token(session, self.cfg, "broadcaster"):
+                            raise twitch.TwitchError("Broadcaster-Token ungültig")
+                        await twitch.eventsub_subscribe_redemptions(session, self.cfg, ws_session["id"])
+                        subscribed = True
+                    if not self.push_live:
+                        log.info("Echtzeit-Verbindung zu Twitch steht - Votes kommen ohne Verzögerung an.")
+                    self.push_live = True
+                    # Einmal abfragen: holt nach, was vor/während des Aufbaus einging.
+                    self._poll_now.set()
+                elif mtype == "notification":
+                    self._on_eventsub_notification(payload)
+                elif mtype == "session_reconnect":
+                    return payload.get("session", {}).get("reconnect_url") or twitch.EVENTSUB_WS_URL
+                elif mtype == "revocation":
+                    reason = payload.get("subscription", {}).get("status", "?")
+                    raise ConnectionError(f"Abo von Twitch widerrufen ({reason})")
+                # session_keepalive: nichts zu tun, hält nur den Timeout zurück.
+        finally:
+            # Schließen nie lange blockieren lassen (Gegenstelle antwortet evtl. nicht).
+            try:
+                await asyncio.wait_for(ws.close(), timeout=3)
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _on_eventsub_notification(self, payload: dict) -> None:
+        if payload.get("subscription", {}).get("type") != twitch.REDEMPTION_ADD:
+            return
+        event = payload.get("event", {})
+        # Wie die Abfrage nur offene Einlösungen verarbeiten.
+        if str(event.get("status", "")).lower() != "unfulfilled":
+            return
+        reward_id = event.get("reward", {}).get("id")
+        reward = next((r for r in self._vote_rewards() if r["reward_id"] == reward_id), None)
+        if not reward:
+            return  # Belohnung gehört nicht zu Tally
+        self._enqueue_redemption(reward, {
+            "id": event.get("id"),
+            "user_name": event.get("user_name"),
+            "user_login": event.get("user_login"),
+            "user_id": event.get("user_id"),
+            "user_input": event.get("user_input", ""),
+        })
 
     # --- Processor -------------------------------------------------------
     async def _processor(self) -> None:
@@ -208,7 +339,6 @@ class VoteBot:
             return
 
         result = await self.sheets.register_vote(match, weight)
-        await self._notify_vote(session, user, match, result)
 
         self.stats["votes_processed"] += 1
         label = data.get("reward_title") or ("Manuell" if kind == "manual" else "Vote")
@@ -219,20 +349,27 @@ class VoteBot:
         voter["weight"] += weight
         voter["games"][match] = voter["games"].get(match, 0) + weight
         self._record_vote(user, match, result)
-        await self._finish_redemption(session, kind, reward_id, vote_id)
+
+        # Chat-Nachricht und Abschluss der Einlösung sind unabhängig -> gleichzeitig.
+        outcomes = await asyncio.gather(
+            self._notify_vote(session, user, match, result),
+            self._finish_redemption(session, kind, reward_id, vote_id),
+            return_exceptions=True,
+        )
+        for step, outcome in zip(("Chat-Nachricht", "Abschluss der Einlösung"), outcomes):
+            if isinstance(outcome, Exception):
+                log.error("Fehler bei %s nach verbuchtem Vote: %s", step, outcome)
 
     def _fuzzy_match(self, user_input: str) -> str | None:
         games = self.sheets.games_list
         if not games or not user_input:
             return None
         cutoff = self.cfg.get("matching", {}).get("min_match_score", 80)
-        lower = [g.lower() for g in games]
-        res = fuzz_process.extractOne(user_input.lower(), lower, score_cutoff=cutoff)
+        res = matching.best_match(user_input, games, cutoff)
         if not res:
             log.info("Kein ausreichendes Match für '%s' (Cutoff %d).", user_input, cutoff)
             return None
-        _, score, idx = res
-        match = games[idx]
+        match, score = res
         log.info("Match: '%s' (Score %.0f) für Eingabe '%s'.", match, score, user_input)
         return match
 
@@ -295,6 +432,7 @@ class VoteBot:
     def status(self) -> dict:
         return {
             "running": self.running,
+            "push_live": self.push_live,
             "sheets_ready": self.sheets.ready,
             "queue_size": self.queue.qsize(),
             "stats": dict(self.stats),

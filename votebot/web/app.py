@@ -297,11 +297,11 @@ async def sheets_test():
 
 
 @app.get("/api/sheets/standings")
-async def sheets_standings():
+async def sheets_standings(fresh: bool = False):
     try:
         if not state.bot.sheets.ready:
             await state.bot.sheets.connect(state.cfg)
-        standings = await state.bot.sheets.get_standings()
+        standings = await state.bot.sheets.get_standings(fresh=fresh)
         return {"ok": True, "standings": standings}
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
