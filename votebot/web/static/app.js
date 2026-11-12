@@ -44,8 +44,15 @@ function applyStatus(s) {
   $("st-games").textContent = bot.games_count || 0;
 
   renderRewardDonut($("chart-rewards"), st.votes_by_reward || {});
-  renderSessionTop($("chart-session"), st.votes_by_game || {});
+  const byGame = st.votes_by_game || {};
+  renderSessionTop($("chart-session"), byGame);
   const voters = st.voters || {};
+  const sesGames = Object.keys(byGame).length;
+  renderFoot($("foot-session"), sesGames ? [
+    [Object.values(byGame).reduce((a, b) => a + b, 0), "Votes"],
+    [sesGames, "Spiele"],
+    [Object.keys(voters).length, "Voter"],
+  ] : []);
   renderVoters($("voters"), voters);
   const vc = Object.keys(voters).length;
   $("voters-count").textContent = vc ? `${vc} Voter` : "";
@@ -80,7 +87,14 @@ async function loadStandings() {
   try {
     const { standings } = await api("/api/sheets/standings");
     renderTopGames($("chart-top"), standings);
+    const voted = (standings || []).filter(s => Number(s.votes) > 0);
+    renderFoot($("foot-top"), voted.length ? [
+      [voted.reduce((a, s) => a + Number(s.votes), 0), "Votes gesamt"],
+      [voted.length, "Spiele mit Votes"],
+    ] : []);
+    renderQuickPicks(voted.slice(0, 8).map(s => s.name));
   } catch (e) {
+    renderFoot($("foot-top"), []);
     $("chart-top").classList.remove("bars");
     $("chart-top").innerHTML = `<div class="empty">${esc(e.message)}</div>`;
   }
@@ -92,6 +106,18 @@ async function resetStats() {
 }
 
 // --- Manueller Vote ---
+// Schnellauswahl: Klick auf ein Top-Spiel trägt den Namen ins Feld ein.
+function renderQuickPicks(names) {
+  const wrap = $("mv-quick");
+  wrap.innerHTML = "";
+  names.forEach(name => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "secondary"; b.textContent = name; b.title = name;
+    b.onclick = () => { $("mv-game").value = name; $("mv-game").focus(); };
+    wrap.appendChild(b);
+  });
+}
+
 async function manualVote() {
   const game = $("mv-game").value.trim();
   const count = Number($("mv-count").value) || 1;

@@ -29,9 +29,16 @@ function escC(s) {
   return (s == null ? "" : String(s)).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-// --- generischer horizontaler Balken-Chart (füllt das Widget vertikal) ---
+// Kennzahlen-Leiste unter einem Chart: items = [[Wert, Beschriftung], ...]
+function renderFoot(el, items) {
+  if (!el) return;
+  el.innerHTML = (items || []).map(([v, k]) =>
+    `<div class="cf"><b title="${escC(v)}">${escC(v)}</b><span>${escC(k)}</span></div>`).join("");
+}
+
+// --- generischer horizontaler Balken-Chart (Name + Wert oben, Balken darunter) ---
 function renderBars(el, items, opts = {}) {
-  const count = opts.count || 14;
+  const count = opts.count || 10;
   const emptyText = opts.empty || "Noch keine Daten.";
   if (!items || !items.length) {
     el.classList.remove("bars");
@@ -49,11 +56,11 @@ function renderBars(el, items, opts = {}) {
     const rank = i + 1;
     const base = rainbowAt(data.length > 1 ? i / (data.length - 1) : 0.15);
     const light = lighten(base, 0.3);
-    const fillStyle = `width:${pct}%;background:linear-gradient(90deg,${base},${light});box-shadow:0 0 12px ${base}99`;
+    const fillStyle = `width:${pct}%;background:linear-gradient(90deg,${base},${light})`;
     row.innerHTML = `
       <span class="hbar-label" title="${escC(d.name)}"><span class="hbar-rank">${rank}</span>${escC(d.name)}</span>
-      <div class="hbar-track"><div class="hbar-fill" style="${fillStyle}"></div></div>
-      <span class="hbar-val">${d.votes}</span>`;
+      <span class="hbar-val">${d.votes}</span>
+      <div class="hbar-track"><div class="hbar-fill" style="${fillStyle}"></div></div>`;
     row.addEventListener("mousemove", (ev) => showTip(ev, `<b>#${rank} ${escC(d.name)}</b><br>${d.votes} ${opts.unit || "Votes"}`));
     row.addEventListener("mouseleave", hideTip);
     el.appendChild(row);
@@ -63,14 +70,14 @@ function renderBars(el, items, opts = {}) {
 // Top-Spiele (Gesamt, aus dem Sheet)
 function renderTopGames(el, standings) {
   renderBars(el, (standings || []).map(s => ({ name: s.name, votes: s.votes })),
-    { count: 15, empty: "Noch keine Votes im Sheet." });
+    { count: 10, empty: "Noch keine Votes im Sheet." });
 }
 
 // Meistgevotete Spiele dieser Session/Stream (aus bot.stats.votes_by_game)
 function renderSessionTop(el, byGame) {
   const items = Object.entries(byGame || {}).map(([name, votes]) => ({ name, votes }))
     .sort((a, b) => b.votes - a.votes);
-  renderBars(el, items, { count: 15, empty: "Noch keine Votes in dieser Session." });
+  renderBars(el, items, { count: 10, empty: "Noch keine Votes in dieser Session." });
 }
 
 // Voter dieser Session: wer hat wie oft für welche Spiele gevotet
@@ -92,7 +99,7 @@ function renderVoters(el, voters) {
       <td class="vuser">${escC(r.user)}</td>
       <td style="text-align:right">${r.count}</td>
       <td style="text-align:right">${r.weight}</td>
-      <td class="vgames">${games}</td>
+      <td class="vgames"><div>${games}</div></td>
     </tr>`;
   }).join("");
 
@@ -107,9 +114,11 @@ function renderRewardDonut(el, byReward) {
   const entries = Object.entries(byReward || {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   const total = entries.reduce((s, [, v]) => s + v, 0);
   if (!total) {
-    el.innerHTML = '<div class="empty">Noch keine Votes in dieser Sitzung.</div>';
+    el.classList.remove("donut");
+    el.innerHTML = '<div class="empty">Noch keine Votes in dieser Session.</div>';
     return;
   }
+  el.classList.add("donut");
 
   const size = 230, stroke = 26, cx = size / 2, r = (size - stroke) / 2 - 6, C = 2 * Math.PI * r;
   const gap = entries.length > 1 ? C * 0.012 : 0; // kleine Lücke zwischen Segmenten
@@ -123,7 +132,7 @@ function renderRewardDonut(el, byReward) {
     const seg = `<circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="url(#g${i})"
        stroke-width="${stroke}" stroke-linecap="round"
        stroke-dasharray="${dash} ${C - dash}" stroke-dashoffset="${-offset}"
-       data-i="${i}" style="filter: drop-shadow(0 0 7px ${base}cc)"></circle>`;
+       data-i="${i}"></circle>`;
     offset += frac * C;
     return { seg, name, val, base, light, frac };
   });
@@ -134,13 +143,13 @@ function renderRewardDonut(el, byReward) {
      </linearGradient>`).join("");
 
   const legend = arcs.map(a =>
-    `<div class="li"><span class="sw" style="color:${a.light};background:${a.base}"></span>
-       <span class="ln">${escC(a.name)}</span>
+    `<div class="li"><span class="sw" style="background:${a.base}"></span>
+       <span class="ln" title="${escC(a.name)}">${escC(a.name)}</span>
        <span class="lv">${a.val} · ${Math.round(a.frac * 100)}%</span></div>`).join("");
 
   el.innerHTML = `
     <div class="donut-wrap">
-      <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <svg viewBox="0 0 ${size} ${size}" role="img" aria-label="Vote-Verteilung nach Belohnung">
         <defs>${defs}</defs>
         <circle cx="${cx}" cy="${cx}" r="${r + stroke / 2 + 4}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
         <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="${stroke}"/>

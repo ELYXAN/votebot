@@ -19,9 +19,14 @@
   --grad-soft: linear-gradient(120deg, rgba(52,214,198,.16), rgba(74,158,255,.16), rgba(139,123,255,.16), rgba(228,111,209,.16), rgba(255,154,99,.16));
 
   /* Glas-Oberflächen */
-  --glass: linear-gradient(158deg, rgba(255,255,255,0.14), rgba(255,255,255,0.035));
+  /* Silber-Panel: heller Schimmer oben, gebürstetes Grau, metallischer Rand */
+  --glass:
+    linear-gradient(180deg, rgba(255,255,255,0.13), rgba(255,255,255,0) 46%),
+    linear-gradient(158deg, rgba(226,232,243,0.30), rgba(176,186,204,0.17) 48%, rgba(132,142,162,0.13));
+  --rim: linear-gradient(150deg, rgba(255,255,255,0.85), rgba(215,222,234,0.34) 30%, rgba(140,150,170,0.18) 62%, rgba(255,255,255,0.45));
+  --silver-text: linear-gradient(180deg, #ffffff 8%, #dfe5ee 48%, #9aa5b8 100%);
   --glass-strong: linear-gradient(158deg, rgba(255,255,255,0.2), rgba(255,255,255,0.06));
-  --glass-input: rgba(255,255,255,0.055);
+  --glass-input: rgba(10,13,20,0.34);
   --edge: rgba(255,255,255,0.16);
   --edge-soft: rgba(255,255,255,0.10);
   --hi: inset 0 1px 0 rgba(255,255,255,0.28);
@@ -42,13 +47,12 @@ body {
   font-weight: 400;
   /* Dunkler Graphit-Grund mit mehreren weichen Lichtquellen (Blooms) */
   background:
-    radial-gradient(900px 640px at 10% -8%, rgba(52,214,198,0.16), transparent 58%),
-    radial-gradient(1000px 680px at 42% -12%, rgba(74,158,255,0.16), transparent 58%),
-    radial-gradient(900px 620px at 78% 2%, rgba(139,123,255,0.16), transparent 56%),
-    radial-gradient(900px 640px at 100% 6%, rgba(228,111,209,0.14), transparent 55%),
-    radial-gradient(1200px 900px at 60% 118%, rgba(255,154,99,0.12), transparent 60%),
-    radial-gradient(1100px 820px at 25% 120%, rgba(139,123,255,0.14), transparent 60%),
-    linear-gradient(180deg, #1a1f29, #0f131b 60%, #0c0f16);
+    radial-gradient(1100px 700px at 50% -18%, rgba(225,232,245,0.13), transparent 60%),
+    radial-gradient(900px 640px at 6% -8%, rgba(52,214,198,0.09), transparent 58%),
+    radial-gradient(900px 620px at 96% 0%, rgba(139,123,255,0.10), transparent 56%),
+    radial-gradient(1200px 900px at 70% 120%, rgba(228,111,209,0.07), transparent 60%),
+    radial-gradient(1100px 820px at 20% 122%, rgba(74,158,255,0.08), transparent 60%),
+    linear-gradient(180deg, #1c2029, #12151c 58%, #0d1016);
   background-attachment: fixed;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
@@ -67,6 +71,11 @@ header.topbar {
   -webkit-backdrop-filter: blur(22px) saturate(1.3);
   box-shadow: var(--hi);
   position: sticky; top: 0; z-index: 20;
+  flex-wrap: wrap;
+}
+@media (max-width: 640px) {
+  header.topbar { padding: .7rem 1rem; gap: .6rem; }
+  header.topbar #channel-label { display: none; }
 }
 header.topbar .logo { width: 2.5rem; height: 2.5rem; display: block; }
 header.topbar .logo-mark { width: 100%; height: 100%; display: block; filter: drop-shadow(0 3px 9px rgba(74,158,255,0.5)) drop-shadow(0 5px 15px rgba(228,111,209,0.4)); }
@@ -76,25 +85,34 @@ header.topbar .spacer { flex: 1; }
 /* --- Container --- */
 .container { max-width: 1040px; margin: 0 auto; padding: 1.9rem 1.5rem 3rem; }
 .container.wide { max-width: none; width: 100%; padding: 1.7rem 2.1rem 3rem; }
+@media (max-width: 640px) { .container.wide { padding: 1rem .9rem 2.5rem; } }
 
-/* --- Cards (frosted silver) --- */
-.card {
+/* --- Cards (PS5-Silber: frosted panel + metallischer Rand) --- */
+.card, .kpi {
+  position: relative;
   background: var(--glass);
-  backdrop-filter: blur(26px) saturate(1.3);
-  -webkit-backdrop-filter: blur(26px) saturate(1.3);
-  border: 1px solid var(--edge);
+  backdrop-filter: blur(28px) saturate(1.15);
+  -webkit-backdrop-filter: blur(28px) saturate(1.15);
+  border: 0;
   border-radius: var(--radius);
-  padding: 1.4rem 1.5rem;
-  box-shadow: var(--hi), var(--shadow);
-  transition: border-color .2s, transform .2s;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.30), inset 0 -1px 0 rgba(0,0,0,0.22), var(--shadow);
 }
-.card:hover { border-color: rgba(255,255,255,0.26); }
+/* 1px-Metallrand als Verlauf (Maske lässt nur den Rand stehen) */
+.card::before, .kpi::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+  background: var(--rim); pointer-events: none; opacity: .8; transition: opacity .2s;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+}
+.card:hover::before, .kpi:hover::before { opacity: 1; }
+.card { padding: 1.4rem 1.5rem; min-width: 0; }
 .card.fill { height: 100%; }
 .card h2 {
   margin: 0 0 1rem; font-size: .76rem; font-weight: 700;
   letter-spacing: 1.8px; text-transform: uppercase; color: var(--muted);
 }
 .card h3 { margin: 0 0 .85rem; font-size: .95rem; font-weight: 600; }
+.card label.first { margin-top: 0; }
 .card .hint { color: var(--muted); font-size: .86rem; margin: -.5rem 0 1.1rem; }
 
 /* --- Forms --- */
@@ -186,80 +204,107 @@ a.pill:hover { text-decoration: none; border-color: rgba(255,255,255,0.3); color
 .code + p.hint, .code + .hint { margin-top: 1.15rem; }
 ol + .code, p + .code { margin-top: .4rem; }
 
-/* --- KPI-Tiles --- */
-.kpis { display: grid; gap: 1.15rem; margin-bottom: 1.15rem; grid-template-columns: repeat(2, 1fr); }
-@media (min-width: 720px) { .kpis { grid-template-columns: repeat(4, 1fr); } }
-.kpi {
-  position: relative; overflow: hidden;
-  background: var(--glass); backdrop-filter: blur(26px) saturate(1.3); -webkit-backdrop-filter: blur(26px) saturate(1.3);
-  border: 1px solid var(--edge); border-radius: var(--radius);
-  padding: 1.25rem 1.4rem; box-shadow: var(--hi), var(--shadow);
-  transition: transform .2s, border-color .2s;
+/* --- KPI-Kacheln: Zahl dominiert, kein Icon --- */
+.kpis { display: grid; gap: 1.15rem; margin-bottom: 1.15rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 760px) { .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.kpi { overflow: hidden; padding: 1rem 1.4rem 1.05rem; transition: transform .2s;
+  display: flex; flex-direction: column; gap: .35rem; }
+.kpi .txt { min-width: 0; }
+/* Breite Kacheln: Zahl links, Beschriftung daneben */
+@media (min-width: 1500px) {
+  .kpi { flex-direction: row; align-items: center; gap: 1.2rem; padding: 1rem 1.5rem; }
+  .kpi .txt { flex: 1 1 0; }
 }
-.kpi:hover { transform: translateY(-3px); border-color: rgba(255,255,255,0.28); }
+.kpi:hover { transform: translateY(-3px); }
 .kpi::after { /* Lichtquelle oben rechts */
-  content: ""; position: absolute; right: -40px; top: -50px; width: 140px; height: 140px;
-  background: radial-gradient(closest-side, rgba(255,255,255,0.18), transparent); pointer-events: none;
+  content: ""; position: absolute; right: -50px; top: -70px; width: 200px; height: 200px;
+  background: radial-gradient(closest-side, rgba(255,255,255,0.20), transparent); pointer-events: none;
 }
-.kpi .ic {
-  width: 2.4rem; height: 2.4rem; display: grid; place-items: center; color: var(--accent);
-  background: color-mix(in srgb, currentColor 15%, transparent);
-  border: 1px solid color-mix(in srgb, currentColor 40%, transparent);
-  border-radius: 11px; box-shadow: var(--hi);
+.kpi .k { font-size: .78rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi .v {
+  font-size: clamp(3.2rem, 2.2rem + 3.4vw, 5.2rem); font-weight: 750; line-height: 1; margin: 0;
+  letter-spacing: -2px; font-variant-numeric: tabular-nums;
+  background: var(--silver-text); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 10px rgba(0,0,0,0.35));
 }
-.kpi .ic svg { width: 1.35rem; height: 1.35rem; filter: drop-shadow(0 0 8px color-mix(in srgb, currentColor 55%, transparent)); }
-.kpi .v { font-size: 2.3rem; font-weight: 700; line-height: 1.02; margin-top: .55rem; letter-spacing: -.5px; }
-.kpi .k { font-size: .72rem; color: var(--muted); margin-top: .3rem; text-transform: uppercase; letter-spacing: 1.2px; }
-.kpi .accent { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.kpi .v.accent { background-image: var(--grad-bright); }
+.kpi .sub { font-size: .82rem; margin-top: .15rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 520px) { .kpi { padding: .8rem 1rem; } .kpi .k { letter-spacing: 1px; } }
 
-/* --- Dashboard grid --- */
-.dash { display: grid; gap: 1.15rem; grid-template-columns: repeat(12, 1fr); align-items: stretch; }
-.dash > * { grid-column: span 12; }
-.side { display: flex; flex-direction: column; gap: 1.15rem; }
-@media (min-width: 1000px) {
-  .span-3 { grid-column: span 3; }
-  .span-4 { grid-column: span 4; }
-  .span-5 { grid-column: span 5; }
-  .span-6 { grid-column: span 6; }
-  .span-7 { grid-column: span 7; }
-  .span-8 { grid-column: span 8; }
+/* --- Widget-Raster: Anordnung je Fensterbreite --- */
+.board {
+  display: grid; gap: 1.15rem; align-items: stretch;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "top" "ses" "dis" "vot" "man" "rew" "set" "log";
+}
+.a-top { grid-area: top; } .a-ses { grid-area: ses; } .a-dis { grid-area: dis; } .a-vot { grid-area: vot; }
+.a-man { grid-area: man; } .a-rew { grid-area: rew; } .a-set { grid-area: set; } .a-log { grid-area: log; }
+@media (min-width: 760px) {
+  .board {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-areas:
+      "top top top ses ses ses"
+      "dis dis dis man man man"
+      "vot vot vot vot vot vot"
+      "rew rew rew rew rew rew"
+      "set set set set set set"
+      "log log log log log log";
+  }
+}
+@media (min-width: 1240px) {
+  .board {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-areas:
+      "top top top top top ses ses ses ses dis dis dis"
+      "vot vot vot vot vot vot vot vot man man man man"
+      "rew rew rew rew rew rew set set set set set set"
+      "log log log log log log log log log log log log";
+  }
 }
 
 /* Karten, deren Inhalt die volle Höhe füllen soll */
 .card.flexcol { display: flex; flex-direction: column; }
-.card.flexcol .chart { flex: 1; min-height: 0; margin-top: .4rem; }
-.card.flexcol .log { flex: 1; height: auto; min-height: 260px; }
+.card.flexcol .chart { flex: 1 1 auto; min-height: 0; }
+.card.flexcol .voters-scroll { flex: 1 1 auto; display: flex; flex-direction: column; }
+.card.flexcol .voters-scroll > .empty { margin: auto; }
 
-/* --- Charts: horizontale Balken --- */
-.chart { margin-top: .3rem; }
-.chart .empty { color: var(--muted); font-size: .88rem; padding: 2rem 0; text-align: center; display: grid; place-items: center; height: 100%; }
-/* Balken-Variante: füllt die Höhe gleichmäßig */
-.chart.bars { display: flex; flex-direction: column; justify-content: center; gap: .15rem; height: 100%; }
-.chart.bars .hbar-row { flex: 1 1 0; min-height: 22px; max-height: 42px; margin: 0; }
-/* Donut-Variante: zentriert */
-.chart:not(.bars) > .donut-wrap { height: 100%; }
-.card.flexcol .chart:not(.bars) { display: flex; align-items: center; justify-content: center; }
+/* --- Charts --- */
+.chart { margin-top: .2rem; min-width: 0; }
+.chart .empty { color: var(--muted); font-size: .88rem; padding: 1.6rem 0; text-align: center; display: grid; place-items: center; height: 100%; min-height: 7rem; }
 
-.hbar-row { display: grid; grid-template-columns: 11rem 1fr 3rem; align-items: center; gap: .75rem; margin: .5rem 0; }
-.hbar-rank { color: var(--muted); margin-right: .5rem; font-variant-numeric: tabular-nums; font-size: .82rem; }
-.hbar-label { font-size: .87rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hbar-track { background: rgba(0,0,0,0.25); border-radius: 999px; height: 1.15rem; overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.4); }
+/* Balken: Name + Wert in einer Zeile, Balken darunter in voller Breite.
+   So bleibt der Balken bei jeder Widget-Breite lesbar. */
+.chart.bars { display: flex; flex-direction: column; }
+/* Wenige Einträge verteilen sich über die Widget-Höhe (bis zu einer Obergrenze) */
+.chart.bars .hbar-row { flex: 1 1 auto; max-height: 4.4rem; padding: .31rem 0; align-content: center; }
+.hbar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: .8rem; row-gap: .28rem; align-items: baseline; }
+.hbar-rank { display: inline-block; min-width: 1.5rem; color: var(--faint); font-variant-numeric: tabular-nums; font-size: .8rem; }
+.hbar-label { font-size: .88rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hbar-val { font-size: .88rem; font-weight: 650; color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+.hbar-track { grid-column: 1 / -1; background: rgba(0,0,0,0.30); border-radius: 999px; height: .5rem; overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.07); }
 .hbar-fill {
-  height: 100%; border-radius: 999px; min-width: 5px;
+  height: 100%; border-radius: 999px; min-width: 6px;
   background: linear-gradient(90deg, #4a93ff, #8fd0ff);
-  box-shadow: 0 0 14px rgba(90,169,255,0.55), var(--hi);
   transition: width .6s cubic-bezier(.22,.61,.36,1);
 }
-.hbar-val { font-size: .85rem; color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
-.hbar-row:hover .hbar-fill { filter: brightness(1.12); }
+.hbar-row:hover .hbar-fill { filter: brightness(1.15); }
 
-/* --- Donut --- */
-.donut-wrap { display: flex; gap: 1.6rem; align-items: center; flex-wrap: wrap; justify-content: center; }
-.legend { display: flex; flex-direction: column; gap: .6rem; font-size: .88rem; min-width: 160px; }
-.legend .li { display: flex; align-items: center; gap: .6rem; }
-.legend .sw { width: 13px; height: 13px; border-radius: 4px; flex-shrink: 0; box-shadow: 0 0 10px currentColor; }
-.legend .ln { color: var(--text); }
-.legend .lv { color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; padding-left: 1rem; }
+/* Kennzahlen-Leiste am unteren Rand eines Chart-Widgets */
+.chart-foot { display: flex; flex-wrap: wrap; gap: .5rem 1.6rem; margin-top: 1.1rem; padding-top: .9rem; border-top: 1px solid var(--edge-soft); }
+.chart-foot:empty { display: none; }
+.chart-foot .cf { min-width: 0; }
+.chart-foot .cf b { display: block; font-size: 1.25rem; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 14rem; }
+.chart-foot .cf span { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1.1px; }
+
+/* --- Donut: skaliert mit dem Widget, Legende bricht darunter um --- */
+.card.flexcol .chart.donut { display: flex; align-items: center; }
+.donut-wrap { display: flex; gap: 1rem 1.6rem; align-items: center; flex-wrap: wrap; justify-content: center; width: 100%; }
+.donut-wrap svg { flex: 0 1 220px; width: 220px; min-width: 150px; max-width: 100%; height: auto; }
+.legend { flex: 1 1 170px; display: flex; flex-direction: column; gap: .55rem; font-size: .88rem; min-width: 0; }
+.legend .li { display: flex; align-items: center; gap: .6rem; min-width: 0; }
+.legend .sw { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; }
+.legend .ln { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.legend .lv { color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; padding-left: .6rem; white-space: nowrap; }
 
 .viz-tip {
   position: fixed; pointer-events: none; z-index: 60;
@@ -272,7 +317,7 @@ ol + .code, p + .code { margin-top: .4rem; }
 /* --- Log --- */
 .log {
   background: rgba(0,0,0,0.28); border: 1px solid var(--edge-soft); border-radius: var(--radius-sm);
-  padding: .9rem; height: 460px; overflow-y: auto; box-shadow: inset 0 2px 8px rgba(0,0,0,0.3);
+  padding: .9rem; height: 300px; overflow-y: auto; box-shadow: inset 0 2px 8px rgba(0,0,0,0.3);
   font-family: ui-monospace, monospace; font-size: .82rem;
 }
 .log .line { display: flex; gap: .75rem; padding: .09rem 0; }
@@ -292,11 +337,12 @@ tr:last-child td { border-bottom: 0; }
 .ranking-scroll { max-height: 460px; overflow-y: auto; }
 
 /* Voter-Tabelle */
-.voters-scroll { max-height: 340px; overflow-y: auto; margin-top: .3rem; }
+.voters-scroll { max-height: 300px; overflow: auto; margin-top: .3rem; }
+.voters-scroll table { min-width: 460px; }
 .voters-scroll table { font-size: .88rem; }
 .voters-scroll th:first-child, .voters-scroll td:first-child { width: 2rem; }
 .vuser { font-weight: 600; }
-.vgames { display: flex; flex-wrap: wrap; gap: .35rem; }
+.vgames > div { display: flex; flex-wrap: wrap; gap: .35rem; }
 .gchip {
   display: inline-flex; align-items: center; gap: .3rem;
   background: rgba(255,255,255,0.06); border: 1px solid var(--edge-soft);
@@ -304,6 +350,11 @@ tr:last-child td { border-bottom: 0; }
 }
 .gchip b { color: var(--accent-soft); font-weight: 700; }
 .empty { color: var(--muted); font-size: .88rem; padding: 1.5rem 0; text-align: center; }
+
+/* Schnellauswahl im Widget "Manueller Vote" */
+.quick { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .2rem; }
+.quick:empty::after { content: "Noch keine Spiele mit Votes."; color: var(--muted); font-size: .84rem; }
+.quick button { padding: .3rem .7rem; font-size: .8rem; font-weight: 500; border-radius: 999px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* --- Reward items --- */
 .reward-item {
@@ -360,6 +411,7 @@ hr.sep { border: 0; border-top: 1px solid var(--edge-soft); margin: 1.3rem 0; }
 small.note { color: var(--muted); display: block; margin-top: .45rem; font-size: .8rem; }
 .grid { display: grid; gap: 1.3rem; }
 @media (min-width: 760px) { .grid.cols-2 { grid-template-columns: 1fr 1fr; } }
+.grid.autofit { grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1.3rem 1.8rem; }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
