@@ -51,6 +51,47 @@ function setText(id, value) {
   if (el.textContent !== text) el.textContent = text;
 }
 
+// --- Kennzahlen-Kacheln oben ---
+// Speisen sich aus zwei Quellen: dem Status (Session) und der Rangliste aus
+// dem Sheet (Gesamtwerte). Beide rufen renderKpis() auf, sobald sie Neues haben.
+const _kpi = { status: null, standings: null, sessionSeen: false };
+const fmtNum = (n) => Number(n || 0).toLocaleString("de-DE");
+function setKpi(id, value) { setText(id, fmtNum(value)); }
+
+function renderKpis() {
+  const bot = (_kpi.status && _kpi.status.bot) || {};
+  const st = bot.stats || {};
+
+  // Votes · Session: gewichtete Votes (ein Super Vote zählt mit seinem Gewicht),
+  // also dieselbe Einheit wie im Sheet. Darunter die Zahl der Einlösungen.
+  const sessionVotes = Object.values(st.votes_by_game || {}).reduce((a, b) => a + b, 0);
+  const redeemed = st.votes_processed || 0;
+  setKpi("st-votes", sessionVotes);
+  setText("sub-votes", redeemed ? `aus ${fmtNum(redeemed)} ${redeemed === 1 ? "Einlösung" : "Einlösungen"}` : "in dieser Session");
+
+  const voters = Object.entries(st.voters || {});
+  setKpi("st-voters", voters.length);
+  const top = voters.sort((a, b) => (b[1].weight || 0) - (a[1].weight || 0))[0];
+  setText("sub-voters", top ? `aktivster: ${top[0]} (${fmtNum(top[1].weight)})` : "in dieser Session");
+
+  const standings = _kpi.standings;
+  if (standings) {
+    const voted = standings.filter(g => Number(g.votes) > 0);
+    setKpi("st-total", voted.reduce((a, g) => a + Number(g.votes), 0));
+    setKpi("st-games", standings.length);
+    setText("sub-games", voted.length ? `davon ${fmtNum(voted.length)} mit Votes` : "im Google Sheet");
+  } else {
+    setKpi("st-games", bot.games_count || 0);
+  }
+  // Alle Kacheln teilen sich eine Schriftgröße: sie richtet sich nach der
+  // längsten Zahl (style.css rechnet mit --kpi-chars). Der Tausenderpunkt ist
+  // schmal und zählt nur halb.
+  const kpis = document.querySelector(".kpis");
+  const width = (text) => text.replace(/\./g, "").length + (text.split(".").length - 1) * 0.5;
+  const chars = String(Math.max(3, ...[...kpis.querySelectorAll(".v")].map(v => width(v.textContent))));
+  if (kpis.style.getPropertyValue("--kpi-chars") !== chars) kpis.style.setProperty("--kpi-chars", chars);
+}
+
 function applyStatus(s) {
   const bot = s.bot || {};
   running = bot.running;
@@ -68,10 +109,8 @@ function applyStatus(s) {
   setText("channel-label", s.broadcaster.login ? "Kanal: " + s.broadcaster.login : "");
 
   const st = bot.stats || {};
-  setText("st-votes", st.votes_processed || 0);
-  setText("st-ai", st.ai_answered || 0);
-  setText("st-queue", bot.queue_size || 0);
-  setText("st-games", bot.games_count || 0);
+  _kpi.status = s;
+  renderKpis();
 
   const byReward = st.votes_by_reward || {};
   if (changed("donut", byReward)) renderRewardDonut($("chart-rewards"), byReward);
@@ -79,6 +118,10 @@ function applyStatus(s) {
   const byGame = st.votes_by_game || {};
   const voters = st.voters || {};
   if (changed("session", [byGame, Object.keys(voters).length])) {
+    // Ein neuer Vote ändert auch die Gesamt-Rangliste. Der Server hat sie
+    // schon aktualisiert, der Abruf löst also keinen Sheets-Zugriff aus.
+    if (_kpi.sessionSeen) loadStandings();
+    _kpi.sessionSeen = true;
     renderSessionTop($("chart-session"), byGame);
     const sesGames = Object.keys(byGame).length;
     renderFoot($("foot-session"), sesGames ? [
@@ -125,6 +168,8 @@ async function toggleBot() {
 async function loadStandings(fresh = false) {
   try {
     const { standings } = await api("/api/sheets/standings" + (fresh ? "?fresh=1" : ""));
+    _kpi.standings = standings || [];
+    renderKpis();
     if (!changed("standings", standings)) return;  // unverändert -> nichts neu zeichnen
     renderTopGames($("chart-top"), standings);
     const voted = (standings || []).filter(s => Number(s.votes) > 0);
@@ -169,6 +214,27 @@ async function manualVote() {
     $("mv-game").value = "";
     setTimeout(loadStandings, 2500); // nach Verarbeitung Ranking aktualisieren
   } catch (e) { showMsg("msg-mv", e.message, "err"); }
+}
+
+// --- Neues Spiel ins Sheet aufnehmen ---
+async function addGame() {
+  const input = $("ng-name"), btn = $("btn-add-game");
+  const name = input.value.trim();
+  if (!name) return showMsg("msg-ng", "Spielname fehlt.", "err");
+  btn.disabled = true;
+  showMsg("msg-ng", "Wird eingetragen…", "info");
+  try {
+    const system = $("ng-system"), notes = $("ng-notes");
+    const res = await api("/api/sheets/games", "POST", { name, system: system.value, notes: notes.value.trim() });
+    showMsg("msg-ng", `"${res.added[0]}" wurde ins Sheet aufgenommen.`, "ok");
+    input.value = "";
+    notes.value = "";
+    system.value = "";
+    system.dispatchEvent(new Event("change"));  // Anzeige des Auswahlfelds nachziehen
+    loadStandings();  // Rangliste und Kennzahlen nachziehen
+  } catch (e) { showMsg("msg-ng", e.message, "err"); }
+  btn.disabled = false;
+  input.focus();
 }
 
 // --- Rewards ---

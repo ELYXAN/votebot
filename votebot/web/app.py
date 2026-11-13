@@ -55,7 +55,24 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Tally", lifespan=lifespan)
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+class _RevalidatedStatic(StaticFiles):
+    """Statische Dateien mit ``Cache-Control: no-cache`` ausliefern.
+
+    Ohne diesen Header schätzt der Browser selbst, wie lange er CSS/JS aus dem
+    Cache nehmen darf, und zeigt nach einem Update noch Stunden die alte
+    Oberfläche. ``no-cache`` heißt: zwischenspeichern erlaubt, aber vor jeder
+    Nutzung kurz nachfragen (ETag) - unverändert kostet das nur ein 304.
+    """
+
+    def file_response(self, *args, **kwargs):
+        resp = super().file_response(*args, **kwargs)
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+
+app.mount("/static", _RevalidatedStatic(directory=STATIC_DIR), name="static")
 
 
 # --- Seiten --------------------------------------------------------------
@@ -305,6 +322,38 @@ async def sheets_standings(fresh: bool = False):
         return {"ok": True, "standings": standings}
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+MAX_GAME_NAME = 150
+MAX_GAME_SYSTEM = 30
+MAX_GAME_NOTES = 200
+
+
+@app.post("/api/sheets/games")
+async def sheets_add_game(payload: dict):
+    """Nimmt ein neues Spiel (0 Votes) in die Voting-Liste im Sheet auf,
+    optional mit Plattform (``system``) und Besonderheiten (``notes``)."""
+    def clean(key: str) -> str:
+        return " ".join(str(payload.get(key) or "").split())
+
+    name, system, notes = clean("name"), clean("system"), clean("notes")
+    if not name:
+        return JSONResponse({"error": "Spielname erforderlich."}, status_code=400)
+    for label, value, limit in (("Spielname", name, MAX_GAME_NAME),
+                                ("Plattform", system, MAX_GAME_SYSTEM),
+                                ("Besonderheiten", notes, MAX_GAME_NOTES)):
+        if len(value) > limit:
+            return JSONResponse({"error": f"{label} ist zu lang (max. {limit} Zeichen)."}, status_code=400)
+    try:
+        if not state.bot.sheets.ready:
+            await state.bot.sheets.connect(state.cfg)
+        result = await state.bot.sheets.add_games([{"name": name, "system": system, "notes": notes}])
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=400)
+    if not result["added"]:
+        return JSONResponse(
+            {"error": f'"{result["existing"][0]}" steht schon im Sheet.'}, status_code=409)
+    return {"ok": True, "added": result["added"]}
 
 
 # --- OpenAI / Matching / sonstige Einstellungen --------------------------

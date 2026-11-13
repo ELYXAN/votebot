@@ -210,8 +210,8 @@ function renderPresets() {
       </div>
       <div class="row" style="gap:.4rem">
         <input type="text" id="pre-${p.id}-title" value="${esc(p.title)}" style="width:150px" ${already ? "disabled" : ""}>
-        <input type="number" id="pre-${p.id}-cost" value="${p.cost}" title="Kosten (Punkte)" style="width:90px" ${already ? "disabled" : ""}>
-        ${p.kind === "vote" ? `<input type="number" id="pre-${p.id}-weight" value="${p.weight}" title="Vote-Gewicht" style="width:70px" ${already ? "disabled" : ""}>` : ""}
+        <input type="number" id="pre-${p.id}-cost" value="${p.cost}" min="0" step="50" title="Kosten (Punkte)" style="width:132px" ${already ? "disabled" : ""}>
+        ${p.kind === "vote" ? `<input type="number" id="pre-${p.id}-weight" value="${p.weight}" min="1" title="Vote-Gewicht" style="width:116px" ${already ? "disabled" : ""}>` : ""}
       </div>`;
     wrap.appendChild(div);
   });

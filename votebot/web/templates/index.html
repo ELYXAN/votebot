@@ -26,10 +26,10 @@
 
     <!-- KPI-Kacheln: große Zahl, kein Icon -->
     <div class="kpis">
-      <div class="kpi"><div class="v accent" id="st-votes">0</div><div class="txt"><div class="k">Votes verarbeitet</div><div class="sub">in dieser Session</div></div></div>
-      <div class="kpi"><div class="v" id="st-ai">0</div><div class="txt"><div class="k">AI-Antworten</div><div class="sub">in dieser Session</div></div></div>
-      <div class="kpi"><div class="v" id="st-games">0</div><div class="txt"><div class="k">Spiele</div><div class="sub">im Google Sheet</div></div></div>
-      <div class="kpi"><div class="v" id="st-queue">0</div><div class="txt"><div class="k">Warteschlange</div><div class="sub">warten auf Verarbeitung</div></div></div>
+      <div class="kpi"><div class="v" id="st-total">0</div><div class="txt"><div class="k">Votes gesamt</div><div class="sub" id="sub-total">seit Messbeginn</div></div></div>
+      <div class="kpi"><div class="v" id="st-votes">0</div><div class="txt"><div class="k">Votes · Session</div><div class="sub" id="sub-votes">in dieser Session</div></div></div>
+      <div class="kpi"><div class="v" id="st-voters">0</div><div class="txt"><div class="k">Voter · Session</div><div class="sub" id="sub-voters">in dieser Session</div></div></div>
+      <div class="kpi"><div class="v" id="st-games">0</div><div class="txt"><div class="k">Spiele</div><div class="sub" id="sub-games">im Google Sheet</div></div></div>
     </div>
 
     <!-- Widget-Raster (Anordnung je Fensterbreite über grid-template-areas in style.css) -->
@@ -67,6 +67,25 @@
         <div class="msg" id="msg-mv"></div>
         <label>Schnellauswahl · Top-Spiele</label>
         <div class="quick" id="mv-quick"></div>
+
+        <hr class="sep">
+        <h3>Neues Spiel aufnehmen</h3>
+        <p class="hint">Trägt ein Spiel mit 0 Votes in die Voting-Liste im Google Sheet ein, auf Wunsch mit Plattform und Besonderheiten. Danach kann sofort dafür gevotet werden.</p>
+        <div class="row">
+          <div style="flex:1 1 100%"><label class="first">Spielname</label><input type="text" id="ng-name" placeholder="Name des Spiels" maxlength="150" onkeydown="if(event.key==='Enter')addGame()"></div>
+          <div style="flex:1 1 8rem"><label>Plattform</label>
+            <select id="ng-system">
+              <option value="">Keine Angabe</option>
+              <option value="PS5">PS5</option>
+              <option value="PS4">PS4</option>
+              <option value="PS3">PS3</option>
+              <option value="PS4/PS5">PS4/PS5</option>
+            </select>
+          </div>
+          <div style="flex:2 1 11rem"><label>Besonderheiten</label><input type="text" id="ng-notes" placeholder="z. B. Doppelplatin möglich" maxlength="200" onkeydown="if(event.key==='Enter')addGame()"></div>
+        </div>
+        <div class="row mt"><button class="secondary" id="btn-add-game" onclick="addGame()">Zum Sheet hinzufügen</button></div>
+        <div class="msg" id="msg-ng"></div>
       </div>
 
       <div class="card a-rew">
@@ -81,14 +100,14 @@
             <label class="first">Name</label>
             <input type="text" id="nr-title" placeholder="z. B. Mega Vote">
             <div class="row">
-              <div style="flex:2 1 8rem"><label>Typ</label>
+              <div style="flex:1 1 100%"><label>Typ</label>
                 <select id="nr-kind" onchange="onNewKind()">
                   <option value="vote">Vote (zählt ins Sheet)</option>
                   <option value="ai">AI-Chat</option>
                 </select>
               </div>
-              <div style="flex:1 1 4.5rem"><label>Kosten</label><input type="number" id="nr-cost" value="500"></div>
-              <div style="flex:1 1 4.5rem" id="nr-weight-wrap"><label>Gewicht</label><input type="number" id="nr-weight" value="5"></div>
+              <div style="flex:1 1 4.5rem"><label>Kosten</label><input type="number" id="nr-cost" value="500" min="0" step="50"></div>
+              <div style="flex:1 1 4.5rem" id="nr-weight-wrap"><label>Gewicht</label><input type="number" id="nr-weight" value="5" min="1"></div>
             </div>
             <div class="row mt"><button onclick="createReward()">Auf Twitch anlegen</button></div>
             <div class="msg" id="msg-reward"></div>

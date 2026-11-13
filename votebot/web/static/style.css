@@ -141,6 +141,88 @@ input:focus, select:focus {
 input::placeholder { color: #8591a6; }
 select option { background: #1b2030; color: var(--text); }
 
+/* --- Zahlenfeld mit Minus/Plus (common.js: makeStepper) ---
+   Die Browser-Pfeile sind ausgeblendet; Feld und Knöpfe sitzen in einem Rahmen. */
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.stepper {
+  display: flex; align-items: stretch; gap: 3px; padding: 3px;
+  width: 100%; min-width: 7.2rem;
+  background: var(--glass-input); border: 1px solid var(--edge); border-radius: 11px;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.stepper:focus-within {
+  border-color: var(--accent); background: rgba(255,255,255,0.09);
+  box-shadow: 0 0 0 3px rgba(90, 169, 255, 0.22);
+}
+.stepper.disabled { opacity: .5; }
+.stepper input[type=number], .stepper input[type=number]:focus {
+  /* Breite 0 + wachsen: sonst zählt die Standardbreite des Feldes (~20 Zeichen)
+     als Mindestbreite und sprengt schmale Formularzeilen. */
+  flex: 1 1 0; width: 0; min-width: 0;
+  border: 0; background: transparent; box-shadow: none;
+  padding: calc(.72rem - 4px) .15rem; text-align: center;
+  font-weight: 650; font-variant-numeric: tabular-nums;
+}
+.stepper .step {
+  flex: 0 0 2.15rem; padding: 0; display: grid; place-items: center;
+  border-radius: 8px; border: 1px solid var(--edge-soft);
+  background: rgba(255,255,255,0.08); color: var(--text-dim);
+  box-shadow: var(--hi);
+  transition: transform .1s, background .15s, color .15s, border-color .15s, box-shadow .15s;
+}
+.stepper .step svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.stepper .step:hover:not(:disabled) {
+  background: var(--grad); background-origin: border-box; color: #fff; transform: none;
+  border-color: rgba(255,255,255,0.3); box-shadow: var(--hi), 0 4px 14px rgba(120,120,230,0.42);
+}
+.stepper .step:active:not(:disabled) { transform: scale(.9); }
+.stepper .step:disabled { opacity: .28; cursor: default; }
+
+/* --- Auswahlfeld im eigenen Design (common.js: makeDropdown) --- */
+.dd { position: relative; width: 100%; }
+.dd-native { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; padding: 0; border: 0; }
+.dd .dd-btn {
+  display: flex; align-items: center; justify-content: space-between; gap: .6rem;
+  width: 100%; padding: .72rem .8rem .72rem .85rem; text-align: left;
+  background: var(--glass-input); color: var(--text);
+  border: 1px solid var(--edge); border-radius: 11px; box-shadow: none;
+  font-size: .95rem; font-weight: 400; letter-spacing: 0; line-height: normal;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.dd .dd-btn:hover { transform: none; box-shadow: none; border-color: rgba(255,255,255,0.34); }
+.dd .dd-btn:focus-visible, .dd.open .dd-btn {
+  outline: none; border-color: var(--accent); background: rgba(255,255,255,0.09);
+  box-shadow: 0 0 0 3px rgba(90, 169, 255, 0.22);
+}
+.dd-val { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dd-chev, .dd-check { flex: 0 0 auto; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.dd-chev { color: var(--muted); transition: transform .18s, color .15s; }
+.dd.open .dd-chev { transform: rotate(180deg); color: var(--accent-soft); }
+.dd-list {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30;
+  padding: 5px; border-radius: 13px;
+  background: linear-gradient(180deg, #2b303d, #1f2430);
+  border: 1px solid; border-color: rgba(255,255,255,0.34) rgba(255,255,255,0.14) rgba(255,255,255,0.12) rgba(255,255,255,0.22);
+  box-shadow: 0 14px 34px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12);
+  max-height: 16rem; overflow-y: auto;
+  opacity: 0; transform: translateY(-4px); visibility: hidden; pointer-events: none;
+  transition: opacity .13s, transform .13s, visibility 0s .13s;
+}
+.dd.open .dd-list { opacity: 1; transform: none; visibility: visible; pointer-events: auto; transition: opacity .13s, transform .13s; }
+.dd-opt {
+  display: flex; align-items: center; justify-content: space-between; gap: .6rem;
+  padding: .55rem .7rem; border-radius: 9px; cursor: pointer;
+  font-size: .93rem; color: var(--text-dim);
+}
+.dd-opt span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-opt.active { background: rgba(255,255,255,0.09); color: var(--text); }
+.dd-opt.selected { color: var(--text); font-weight: 600; }
+.dd-opt.disabled { opacity: .4; cursor: default; }
+.dd-check { color: transparent; }
+.dd-opt.selected .dd-check { color: #4ee6d6; }
+
 /* Primärer Button = Clean-Rainbow-Gradient */
 button {
   background: var(--grad);
@@ -215,27 +297,36 @@ ol + .code, p + .code { margin-top: .4rem; }
 /* --- KPI-Kacheln: Zahl dominiert, kein Icon --- */
 .kpis { display: grid; gap: 1.15rem; margin-bottom: 1.15rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (min-width: 760px) { .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.kpi { overflow: hidden; padding: 1rem 1.4rem 1.05rem; transition: transform .2s, border-color .2s;
-  display: flex; flex-direction: column; gap: .35rem; }
+/* Zahl oben in voller Kachelbreite, Beschriftung darunter. Die Kachel ist ein
+   Größen-Container: die Schrift der Zahl richtet sich nach der Kachelbreite. */
+.kpi { overflow: hidden; padding: 1.1rem 1.5rem 1.15rem; transition: transform .2s, border-color .2s;
+  display: flex; flex-direction: column; gap: .45rem; container-type: inline-size; }
 .kpi .txt { min-width: 0; }
-/* Breite Kacheln: Zahl links, Beschriftung daneben */
-@media (min-width: 1500px) {
-  .kpi { flex-direction: row; align-items: center; gap: 1.2rem; padding: 1rem 1.5rem; }
-  .kpi .txt { flex: 1 1 0; }
-}
 .kpi:hover { transform: translateY(-3px); }
 .kpi::after { /* Lichtquelle oben rechts */
   content: ""; position: absolute; right: -50px; top: -70px; width: 200px; height: 200px;
   background: radial-gradient(closest-side, rgba(255,255,255,0.20), transparent); pointer-events: none;
 }
-.kpi .k { font-size: .78rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi .k { font-size: .78rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.8px; }
 .kpi .v {
-  font-size: clamp(3.2rem, 2.2rem + 3.4vw, 5.2rem); font-weight: 750; line-height: 1; margin: 0;
-  letter-spacing: -2px; font-variant-numeric: tabular-nums;
+  /* So groß, wie die längste Zahl aller Kacheln gerade noch in die Kachelbreite
+     passt (--kpi-chars setzt app.js), höchstens 6rem. Alle Kacheln nutzen
+     denselben Wert, die Schriftgröße ist also immer einheitlich. */
+  font-size: clamp(1.7rem, calc(100cqi / (var(--kpi-chars, 3) * .6)), 6rem);
+  font-weight: 750; line-height: 1; margin: 0;
+  letter-spacing: -.03em; font-variant-numeric: tabular-nums;
+  /* Nur so breit wie die Zahl: der Verlauf liegt genau auf den Ziffern */
+  align-self: flex-start; padding-bottom: .04em;
   background: var(--silver-text); -webkit-background-clip: text; background-clip: text; color: transparent;
 }
-.kpi .v.accent { background-image: var(--grad-bright); }
-.kpi .sub { font-size: .82rem; margin-top: .15rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Jede Kachel hat ihren eigenen kräftigen Verlauf. Er läuft schräg von oben
+   nach unten durch drei Farben, damit er auch auf einer einzelnen Ziffer
+   vollständig zu sehen ist. */
+.kpi:nth-child(4n+1) .v { background-image: linear-gradient(160deg, #3dffe3 8%, #1f8fff 52%, #7a4dff 96%); }
+.kpi:nth-child(4n+2) .v { background-image: linear-gradient(160deg, #ffd23d 8%, #ff5fa8 50%, #a44dff 96%); }
+.kpi:nth-child(4n+3) .v { background-image: linear-gradient(160deg, #fff04d 8%, #ff9a1f 50%, #ff3d5e 96%); }
+.kpi:nth-child(4n+4) .v { background-image: linear-gradient(160deg, #e6ff3d 8%, #35e07a 50%, #0fb6d8 96%); }
+.kpi .sub { font-size: .82rem; margin-top: .15rem; color: var(--muted); }
 @media (max-width: 520px) { .kpi { padding: .8rem 1rem; } .kpi .k { letter-spacing: 1px; } }
 
 /* --- Widget-Raster: Anordnung je Fensterbreite --- */
@@ -288,10 +379,12 @@ ol + .code, p + .code { margin-top: .4rem; }
 .hbar-rank { display: inline-block; min-width: 1.5rem; color: var(--faint); font-variant-numeric: tabular-nums; font-size: .8rem; }
 .hbar-label { font-size: .88rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hbar-val { font-size: .88rem; font-weight: 650; color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
-.hbar-track { grid-column: 1 / -1; background: rgba(0,0,0,0.30); border-radius: 999px; height: .5rem; overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.07); }
+.hbar-track { grid-column: 1 / -1; background: rgba(0,0,0,0.30); border-radius: 999px; height: .72rem; overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.07); }
 .hbar-fill {
   height: 100%; border-radius: 999px; min-width: 6px;
-  background: linear-gradient(90deg, #4a93ff, #8fd0ff);
+  background: linear-gradient(90deg, #00f0d0, #0a8bff);
+  /* feiner Glanz an der Oberkante, wie beim Donut */
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 0 rgba(0,0,0,0.16);
 }
 .hbar-row:hover .hbar-fill { filter: brightness(1.15); }
 
@@ -302,26 +395,29 @@ ol + .code, p + .code { margin-top: .4rem; }
 .chart-foot .cf b { display: block; font-size: 1.25rem; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 14rem; }
 .chart-foot .cf span { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1.1px; }
 
-/* --- Donut: schlanker Ring, große Zahl, Legende mit Anteilsbalken --- */
+/* --- Donut: breiter Ring aus Verlaufsflächen, Legende mit Anteilsbalken --- */
 .card.flexcol .chart.donut { display: flex; align-items: center; }
 .donut-wrap { display: flex; gap: 1.1rem 1.8rem; align-items: center; flex-wrap: wrap; justify-content: center; width: 100%; }
 .donut-wrap svg { flex: 0 1 250px; width: 250px; min-width: 170px; max-width: 100%; height: auto; overflow: visible; }
-.donut-wrap .seg { cursor: pointer; transition: opacity .18s, stroke-width .18s; }
-.donut-wrap .dn-num { font-weight: 750; letter-spacing: -3px; font-variant-numeric: tabular-nums; }
+.donut-wrap .seg { cursor: pointer; transition: opacity .18s, transform .18s; transform-origin: 130px 130px; }
+.donut-wrap .dn-num { font-weight: 750; letter-spacing: -2px; font-variant-numeric: tabular-nums; }
 .donut-wrap .dn-cap { fill: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 4px; }
 .donut-wrap.has-focus .seg:not(.on) { opacity: .28; }
-.donut-wrap .seg.on { stroke-width: 19px; }
+.donut-wrap .seg.on { transform: scale(1.035); }
+.donut-wrap .echo g { opacity: .75; transition: opacity .18s; }
+.donut-wrap.has-focus .echo g:not(.on) { opacity: .2; }
+.donut-wrap .echo g.on { opacity: 1; }
 
 .legend { flex: 1 1 180px; display: flex; flex-direction: column; gap: .2rem; font-size: .9rem; min-width: 0; }
 .legend .li { padding: .42rem .6rem .5rem; border-radius: 11px; border: 1px solid transparent; min-width: 0; transition: background .18s, border-color .18s, opacity .18s; }
 .legend .li.on { background: rgba(255,255,255,0.07); border-color: var(--edge-soft); }
 .donut-wrap.has-focus .legend .li:not(.on) { opacity: .5; }
 .legend .lrow { display: flex; align-items: baseline; gap: .55rem; min-width: 0; }
-.legend .sw { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; align-self: center; }
+.legend .sw { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; align-self: center; }
 .legend .ln { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .legend .lv { margin-left: auto; padding-left: .6rem; font-weight: 700; font-size: 1rem; font-variant-numeric: tabular-nums; }
 .legend .lp { min-width: 2.6rem; text-align: right; color: var(--muted); font-size: .82rem; font-variant-numeric: tabular-nums; }
-.legend .lbar { margin-top: .38rem; height: 3px; border-radius: 999px; background: rgba(0,0,0,0.32); overflow: hidden; }
+.legend .lbar { margin-top: .38rem; height: 4px; border-radius: 999px; background: rgba(0,0,0,0.32); overflow: hidden; }
 .legend .lbar span { display: block; height: 100%; border-radius: 999px; }
 
 .viz-tip {
