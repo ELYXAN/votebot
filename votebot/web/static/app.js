@@ -8,60 +8,92 @@ function connectWS() {
   ws = new WebSocket(`${proto}://${location.host}/ws`);
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
-    if (msg.type === "history") { msg.logs.forEach(appendLog); }
-    else if (msg.type === "log") { appendLog(msg.data); }
+    if (msg.type === "history") { appendLogs(msg.logs); }
+    else if (msg.type === "log") { appendLogs([msg.data]); }
     else if (msg.type === "status") { applyStatus(msg.data); }
   };
   ws.onclose = () => { setTimeout(connectWS, 2000); };
 }
 
-function appendLog(entry) {
+// Fügt Log-Zeilen in einem Rutsch ein: Scrollposition einmal messen, alle
+// Zeilen gemeinsam einhängen, einmal scrollen. So kostet auch der Verlauf
+// beim Laden (bis zu 500 Zeilen) nur eine Layout-Berechnung.
+function appendLogs(entries) {
+  if (!entries || !entries.length) return;
   const box = $("log");
   const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
-  const line = document.createElement("div");
-  line.className = "line " + entry.level;
-  line.innerHTML = `<span class="t">${esc(entry.time)}</span><span class="lvl">${esc(entry.level)}</span><span class="m">${esc(entry.message)}</span>`;
-  box.appendChild(line);
+  const frag = document.createDocumentFragment();
+  for (const entry of entries) {
+    const line = document.createElement("div");
+    line.className = "line " + entry.level;
+    line.innerHTML = `<span class="t">${esc(entry.time)}</span><span class="lvl">${esc(entry.level)}</span><span class="m">${esc(entry.message)}</span>`;
+    frag.appendChild(line);
+  }
+  box.appendChild(frag);
   while (box.childElementCount > 600) box.removeChild(box.firstChild);
   if (atBottom) box.scrollTop = box.scrollHeight;
 }
 
 function clearLog() { $("log").innerHTML = ""; }
 
+// Der Server schickt alle 2 Sekunden den kompletten Status. Damit der Browser
+// nicht jedes Mal alle Widgets neu aufbaut und neu zeichnet, wird jedes Widget
+// nur angefasst, wenn sich seine Daten geändert haben.
+const _lastData = {};
+function changed(key, data) {
+  const sig = JSON.stringify(data);
+  if (_lastData[key] === sig) return false;
+  _lastData[key] = sig;
+  return true;
+}
+function setText(id, value) {
+  const el = $(id), text = String(value);
+  if (el.textContent !== text) el.textContent = text;
+}
+
 function applyStatus(s) {
   const bot = s.bot || {};
   running = bot.running;
-  const pill = $("bot-pill");
-  pill.className = "pill " + (running ? "run" : "stop");
-  // "Echtzeit" = Votes kommen per Twitch-Push, "Abfrage" = Rückfall auf Sekundentakt.
-  const mode = !running ? "gestoppt" : (bot.push_live ? "läuft · Echtzeit" : "läuft · Abfrage");
-  pill.title = !running ? "" : (bot.push_live
-    ? "Votes kommen in Echtzeit über Twitch EventSub an."
-    : "Echtzeit-Verbindung steht gerade nicht. Votes werden alle 2 Sekunden abgefragt.");
-  pill.innerHTML = `<span class="dot ${running ? "ok" : "off"}"></span> ${mode}`;
-  $("btn-toggle").textContent = running ? "⏸ Stoppen" : "▶ Starten";
-  $("channel-label").textContent = s.broadcaster.login ? "Kanal: " + s.broadcaster.login : "";
+  if (changed("pill", [running, bot.push_live])) {
+    const pill = $("bot-pill");
+    pill.className = "pill " + (running ? "run" : "stop");
+    // "Echtzeit" = Votes kommen per Twitch-Push, "Abfrage" = Rückfall auf Sekundentakt.
+    const mode = !running ? "gestoppt" : (bot.push_live ? "läuft · Echtzeit" : "läuft · Abfrage");
+    pill.title = !running ? "" : (bot.push_live
+      ? "Votes kommen in Echtzeit über Twitch EventSub an."
+      : "Echtzeit-Verbindung steht gerade nicht. Votes werden alle 2 Sekunden abgefragt.");
+    pill.innerHTML = `<span class="dot ${running ? "ok" : "off"}"></span> ${mode}`;
+  }
+  setText("btn-toggle", running ? "⏸ Stoppen" : "▶ Starten");
+  setText("channel-label", s.broadcaster.login ? "Kanal: " + s.broadcaster.login : "");
 
   const st = bot.stats || {};
-  $("st-votes").textContent = st.votes_processed || 0;
-  $("st-ai").textContent = st.ai_answered || 0;
-  $("st-queue").textContent = bot.queue_size || 0;
-  $("st-games").textContent = bot.games_count || 0;
+  setText("st-votes", st.votes_processed || 0);
+  setText("st-ai", st.ai_answered || 0);
+  setText("st-queue", bot.queue_size || 0);
+  setText("st-games", bot.games_count || 0);
 
-  renderRewardDonut($("chart-rewards"), st.votes_by_reward || {});
+  const byReward = st.votes_by_reward || {};
+  if (changed("donut", byReward)) renderRewardDonut($("chart-rewards"), byReward);
+
   const byGame = st.votes_by_game || {};
-  renderSessionTop($("chart-session"), byGame);
   const voters = st.voters || {};
-  const sesGames = Object.keys(byGame).length;
-  renderFoot($("foot-session"), sesGames ? [
-    [Object.values(byGame).reduce((a, b) => a + b, 0), "Votes"],
-    [sesGames, "Spiele"],
-    [Object.keys(voters).length, "Voter"],
-  ] : []);
-  renderVoters($("voters"), voters);
-  const vc = Object.keys(voters).length;
-  $("voters-count").textContent = vc ? `${vc} Voter` : "";
-  renderRewards(s.rewards || []);
+  if (changed("session", [byGame, Object.keys(voters).length])) {
+    renderSessionTop($("chart-session"), byGame);
+    const sesGames = Object.keys(byGame).length;
+    renderFoot($("foot-session"), sesGames ? [
+      [Object.values(byGame).reduce((a, b) => a + b, 0), "Votes"],
+      [sesGames, "Spiele"],
+      [Object.keys(voters).length, "Voter"],
+    ] : []);
+  }
+  if (changed("voters", voters)) {
+    renderVoters($("voters"), voters);
+    const vc = Object.keys(voters).length;
+    setText("voters-count", vc ? `${vc} Voter` : "");
+  }
+  const rewards = s.rewards || [];
+  if (changed("rewards", rewards)) renderRewards(rewards);
 
   // Warnung, wenn der Chat-Account keine Schreib-Berechtigung hat.
   const needsReauth = s.status && s.status.chat && !s.status.chat_scope;
@@ -93,6 +125,7 @@ async function toggleBot() {
 async function loadStandings(fresh = false) {
   try {
     const { standings } = await api("/api/sheets/standings" + (fresh ? "?fresh=1" : ""));
+    if (!changed("standings", standings)) return;  // unverändert -> nichts neu zeichnen
     renderTopGames($("chart-top"), standings);
     const voted = (standings || []).filter(s => Number(s.votes) > 0);
     renderFoot($("foot-top"), voted.length ? [
@@ -101,6 +134,7 @@ async function loadStandings(fresh = false) {
     ] : []);
     renderQuickPicks(voted.slice(0, 8).map(s => s.name));
   } catch (e) {
+    delete _lastData.standings;  // nach einem Fehler beim nächsten Erfolg wieder zeichnen
     renderFoot($("foot-top"), []);
     $("chart-top").classList.remove("bars");
     $("chart-top").innerHTML = `<div class="empty">${esc(e.message)}</div>`;

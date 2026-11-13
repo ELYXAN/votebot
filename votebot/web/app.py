@@ -369,6 +369,10 @@ async def vote_manual(payload: dict):
 
 
 # --- WebSocket: Live-Log + Status ---------------------------------------
+STATUS_IDLE = 2.0        # Sekunden zwischen zwei Status-Meldungen im Leerlauf
+STATUS_AFTER_LOG = 0.25  # so kurz nach einer Log-Zeile folgt ein frischer Status
+
+
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
@@ -377,12 +381,22 @@ async def ws_endpoint(ws: WebSocket):
         # Verlauf + initialer Status.
         await ws.send_json({"type": "history", "logs": logging_setup.recent()})
         await ws.send_json({"type": "status", "data": _full_status()})
+        # Der Status geht spätestens alle STATUS_IDLE Sekunden raus. Kommt eine
+        # Log-Zeile (z. B. ein Vote), wird der nächste Status auf kurz danach
+        # vorgezogen, damit Zahlen und Charts nicht hinter dem Log herhinken.
+        # Der Termin wird dabei nie nach hinten geschoben: auch bei Dauer-Log
+        # kommt der Status regelmäßig durch.
+        loop = asyncio.get_running_loop()
+        next_status = loop.time() + STATUS_IDLE
         while True:
             try:
-                entry = await asyncio.wait_for(queue.get(), timeout=2.0)
+                entry = await asyncio.wait_for(
+                    queue.get(), timeout=max(0.0, next_status - loop.time()))
                 await ws.send_json({"type": "log", "data": entry})
+                next_status = min(next_status, loop.time() + STATUS_AFTER_LOG)
             except asyncio.TimeoutError:
                 await ws.send_json({"type": "status", "data": _full_status()})
+                next_status = loop.time() + STATUS_IDLE
     except WebSocketDisconnect:
         pass
     except Exception:  # noqa: BLE001
