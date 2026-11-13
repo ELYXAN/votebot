@@ -64,5 +64,7 @@ find "$STAGE/app" \( -name '*.json' -o -name '*.csv' \) -print -delete | sed 's/
 # 4) Installer
 OUT="$DIST/Tally-Setup-$VERSION.exe"
 echo "-- Erzeuge Installer"
-( cd "$HERE" && makensis -V2 -DVERSION="$VERSION" -DSTAGE="$STAGE" -DOUTFILE="$OUT" tally.nsi )
+# Windows verlangt für die Datei-Version genau vier Zahlen (4.0 -> 4.0.0.0, 4.0.1 -> 4.0.1.0).
+VIVERSION="$(echo "$VERSION.0.0.0" | cut -d. -f1-4)"
+( cd "$HERE" && makensis -V2 -DVERSION="$VERSION" -DVIVERSION="$VIVERSION" -DSTAGE="$STAGE" -DOUTFILE="$OUT" tally.nsi )
 echo "== Fertig: $OUT ($(du -h "$OUT" | cut -f1)) =="

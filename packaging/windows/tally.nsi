@@ -18,7 +18,7 @@ RequestExecutionLevel user
 SetCompressor /SOLID lzma
 BrandingText "${APP} ${VERSION}"
 
-VIProductVersion "${VERSION}.0.0"
+VIProductVersion "${VIVERSION}"
 VIAddVersionKey "ProductName" "${APP}"
 VIAddVersionKey "FileDescription" "${APP} - Twitch Vote Tracker (Setup)"
 VIAddVersionKey "FileVersion" "${VERSION}"
