@@ -19,6 +19,19 @@ log = get_logger("votebot.sheets")
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 VOTE_COLUMN = "Votes"
 GAME_COLUMN = "Game"
+# Zusatzspalten für neu aufgenommene Spiele. Erkannt wird die Spalte an ihrer
+# Überschrift (Groß-/Kleinschreibung egal); der erste Name wird beim Anlegen genutzt.
+SYSTEM_COLUMN = "System"
+SYSTEM_HEADERS = ("system", "plattform", "platform", "konsole")
+NOTES_COLUMN = "Besonderheiten"
+NOTES_HEADERS = ("besonderheiten", "besonderheit", "notizen", "anmerkungen", "hinweise")
+# Platz-Spalte: Steht eine Spalte mit einer dieser Überschriften im Blatt, hält
+# der Bot dort den aktuellen Platz jedes Spiels (1 = meiste Votes) aktuell. Es
+# ist derselbe Platz, den er im Chat nennt. Angelegt wird die Spalte nicht.
+# ("positon" ist die Schreibweise im bestehenden Sheet.)
+POSITION_HEADERS = ("positon", "position", "platz", "rang", "pos", "#")
+# Gelesen wird das ganze Blatt, damit beim Sortieren ganze Zeilen wandern.
+TABLE_RANGE = "A1:ZZ"
 # Sekunden, die eine gelesene Rangliste fürs Dashboard wiederverwendet wird.
 STANDINGS_TTL = 10.0
 
@@ -51,6 +64,10 @@ class GoogleSheets:
         self.cache_validity: int = 300
         self._standings: list[dict] | None = None
         self._standings_at: float = 0
+        # Votes und das Hinzufügen von Spielen lesen das Blatt, rechnen und
+        # schreiben es zurück. Die Sperre verhindert, dass sich zwei solche
+        # Abläufe überholen und einer die Änderung des anderen überschreibt.
+        self._lock = asyncio.Lock()
 
     @property
     def ready(self) -> bool:
@@ -132,6 +149,88 @@ class GoogleSheets:
         ]
         self._standings_at = time.time()
 
+    # --- Blatt lesen/schreiben (laufen bereits im Thread) -------------------
+    @staticmethod
+    def _position_col(header: list) -> int | None:
+        """Index der Platz-Spalte (siehe ``POSITION_HEADERS``) oder ``None``."""
+        for i, h in enumerate(header):
+            if i >= 2 and str(h).strip().casefold() in POSITION_HEADERS:
+                return i
+        return None
+
+    def _read_table(self) -> tuple[list, list[list], bool, int]:
+        """Liest das ganze Blatt in einem Aufruf.
+
+        Rückgabe: ``(header, rows, clean, used_rows)``. ``rows`` sind die Zeilen
+        mit Spielnamen in Blatt-Reihenfolge, jede auf die volle Tabellenbreite
+        aufgefüllt, mit Votes als ganze Zahl in Spalte 0 und dem Namen ohne
+        Rand-Leerzeichen in Spalte 1. Alle weiteren Spalten (System,
+        Besonderheiten, ...) bleiben unverändert an ihrer Zeile hängen.
+
+        ``clean``: Die Spalten Votes/Game (und die Platz-Spalte, falls
+        vorhanden) enthalten exakt das, was ein Neuschreiben erzeugen würde
+        (lückenlos ab Zeile 2, Votes als ganze Zahl, Namen ohne Rand-Leerzeichen,
+        Platz = Zeilennummer in der Liste). Nur dann ist das Schreiben einer
+        einzelnen Zelle gleichwertig zum kompletten Neuschreiben.
+        ``used_rows``: Anzahl belegter Datenzeilen inkl. Leerzeilen dazwischen."""
+        data = self.worksheet.get(TABLE_RANGE, value_render_option="UNFORMATTED_VALUE")
+        header = list(data[0]) if data else []
+        body = data[1:]
+        width = max([2, len(header)] + [len(r) for r in body])
+        pos_col = self._position_col(header)
+        rows: list[list] = []
+        clean = True
+        for idx, r in enumerate(body, start=2):
+            if len(r) >= 2 and str(r[1]).strip():
+                raw_votes, raw_name = r[0], r[1]
+                try:
+                    votes = int(raw_votes) if str(raw_votes).strip() else 0
+                except (ValueError, TypeError):
+                    votes = 0
+                name = str(raw_name).strip()
+                if type(raw_votes) is not int or raw_name != name or idx != len(rows) + 2:
+                    clean = False
+                if pos_col is not None:
+                    pos = r[pos_col] if len(r) > pos_col else ""
+                    if type(pos) is not int or pos != len(rows) + 1:
+                        clean = False
+                rows.append([votes, name] + list(r[2:]) + [""] * (width - len(r)))
+        return header, rows, clean, len(body)
+
+    def _write_table(self, header: list, sorted_rows: list[list], clear_rows: int = 0) -> None:
+        """Schreibt Kopfzeile + sortierte Zeilen ab A1 in voller Breite, sodass
+        jede Zeile als Ganzes wandert und die Zusatzspalten bei ihrem Spiel
+        bleiben. Die Platz-Spalte (falls vorhanden) wird dabei neu durchgezählt.
+        ``clear_rows`` leert zusätzlich so viele Zeilen darunter.
+
+        Hinweis: Geschrieben werden Werte. Stünde in einer Zusatzspalte eine
+        Formel, würde sie beim ersten Umsortieren durch ihr Ergebnis ersetzt."""
+        width = max([2, len(header)] + [len(r) for r in sorted_rows])
+        head = list(header) + [""] * (width - len(header))
+        if not str(head[0]).strip():
+            head[0] = VOTE_COLUMN
+        if not str(head[1]).strip():
+            head[1] = GAME_COLUMN
+        values = [head]
+        values += [list(r) + [""] * (width - len(r)) for r in sorted_rows]
+        pos_col = self._position_col(head)
+        if pos_col is not None:
+            for place, row in enumerate(values[1:], start=1):
+                row[pos_col] = place
+        values += [[""] * width] * max(clear_rows, 0)
+        end = gspread.utils.rowcol_to_a1(len(values), width)
+        self.worksheet.update(range_name=f"A1:{end}", values=values)
+
+    @staticmethod
+    def _sorted(rows: list[list]) -> list[list]:
+        return sorted(rows, key=lambda r: (-r[0], r[1]))
+
+    def _after_write(self, sorted_rows: list[list]) -> None:
+        """Spiele-Cache und Rangliste direkt aus dem neu sortierten Stand setzen."""
+        self.games_list = [r[1] for r in sorted_rows]
+        self.last_cache_update = time.time()
+        self._set_standings([{"votes": r[0], "name": r[1]} for r in sorted_rows])
+
     async def register_vote(self, match: str, weight: int) -> dict:
         """Verbucht einen Vote für ``match``: liest Stand, berechnet neuen Rang
         und schreibt das Ergebnis. Gibt Infos für die Chat-Nachricht zurück
@@ -139,67 +238,41 @@ class GoogleSheets:
 
         Pro Vote genau zwei Sheets-Aufrufe (Lesen + Schreiben). Ändert der Vote
         die Reihenfolge nicht und ist das Blatt bereits sauber sortiert, wird nur
-        die eine Zelle geschrieben; sonst das Blatt sortiert neu geschrieben. Das
-        Ergebnis im Sheet ist in beiden Fällen identisch."""
+        die eine Zelle geschrieben; sonst wird das Blatt sortiert neu geschrieben,
+        und zwar ganze Zeilen, damit Zusatzspalten bei ihrem Spiel bleiben."""
         def _do():
-            data = self.worksheet.get("A2:B", value_render_option="UNFORMATTED_VALUE")
-            games = []
-            cell_row = None
-            current = 0
-            matches = 0
-            # "clean": Das Blatt enthält exakt das, was ein Neuschreiben erzeugen
-            # würde (lückenlos ab Zeile 2, Votes als ganze Zahl, Namen ohne Rand-
-            # Leerzeichen). Nur dann ist das Schreiben einer einzelnen Zelle
-            # gleichwertig zum kompletten Neuschreiben.
-            clean = True
-            for idx, r in enumerate(data, start=2):
-                if len(r) >= 2 and str(r[1]).strip():
-                    raw_votes, raw_name = r[0], r[1]
-                    try:
-                        v = int(raw_votes) if str(raw_votes).strip() else 0
-                    except (ValueError, TypeError):
-                        v = 0
-                    name = str(raw_name).strip()
-                    if (type(raw_votes) is not int or raw_name != name
-                            or idx != len(games) + 2):
-                        clean = False
-                    games.append({"votes": v, "name": name})
-                    if name == match:
-                        cell_row = idx
-                        current = v
-                        matches += 1
+            header, rows, clean, used_rows = self._read_table()
+            hits = [i for i, r in enumerate(rows) if r[1] == match]
+            current = rows[hits[-1]][0] if hits else 0
 
             # Alten Rang bestimmen.
-            old_sorted = sorted(games, key=lambda x: (-x["votes"], x["name"]))
-            old_rank = next((i for i, g in enumerate(old_sorted, 1) if g["name"] == match), 0)
+            old_rank = next((i for i, r in enumerate(self._sorted(rows), 1) if r[1] == match), 0)
 
             new_votes = current + weight
 
             # Neuen Stand lokal simulieren.
-            found = False
-            for g in games:
-                if g["name"] == match:
-                    g["votes"] = new_votes
-                    found = True
-            if not found:
-                games.append({"votes": new_votes, "name": match})
+            for i in hits:
+                rows[i][0] = new_votes
+            if not hits:
+                width = len(rows[0]) if rows else max(2, len(header))
+                rows.append([new_votes, match] + [""] * (width - 2))
 
-            new_sorted = sorted(games, key=lambda x: (-x["votes"], x["name"]))
-            new_rank = next((i for i, g in enumerate(new_sorted, 1) if g["name"] == match), 0)
+            new_sorted = self._sorted(rows)
+            new_rank = next((i for i, r in enumerate(new_sorted, 1) if r[1] == match), 0)
 
-            if cell_row and clean and matches == 1 and games == new_sorted:
+            if (len(hits) == 1 and clean
+                    and [r[:2] for r in rows] == [r[:2] for r in new_sorted]):
                 # Reihenfolge unverändert: nur die Vote-Zelle schreiben.
-                self.worksheet.update_cell(cell_row, 1, new_votes)
+                self.worksheet.update_cell(hits[0] + 2, 1, new_votes)
             else:
-                used_rows = len(data)
-                if not cell_row:
+                if not hits:
                     # Neues Spiel: Zeile anhängen (erweitert bei Bedarf das Blatt).
                     self.worksheet.append_row([new_votes, match])
                     used_rows += 1
                 # Gesamtes Blatt sortiert zurückschreiben. Enthielt es Leer- oder
                 # Restzeilen, werden die übrig bleibenden Zeilen darunter geleert,
                 # damit kein veralteter Eintrag stehen bleibt.
-                self._write_sorted(new_sorted, clear_rows=used_rows - len(new_sorted))
+                self._write_table(header, new_sorted, clear_rows=used_rows - len(new_sorted))
 
             return {
                 "new_votes": new_votes,
@@ -209,22 +282,90 @@ class GoogleSheets:
                 "sorted": new_sorted,
             }
 
-        result = await asyncio.to_thread(_do)
-        # Spiele-Cache und Rangliste direkt aus dem neu sortierten Stand aktualisieren.
-        new_sorted = result.pop("sorted")
-        self.games_list = [g["name"] for g in new_sorted]
-        self.last_cache_update = time.time()
-        self._set_standings(new_sorted)
+        async with self._lock:
+            result = await asyncio.to_thread(_do)
+            self._after_write(result.pop("sorted"))
         return result
 
-    def _write_sorted(self, sorted_games: list[dict], clear_rows: int = 0) -> None:
-        """(läuft bereits im Thread) Schreibt Kopfzeile + sortierte Daten ab A1.
-        ``clear_rows`` leert zusätzlich so viele Zeilen unterhalb der Daten."""
-        values = [[VOTE_COLUMN, GAME_COLUMN]]
-        values += [[g["votes"], g["name"]] for g in sorted_games]
-        values += [["", ""]] * max(clear_rows, 0)
-        end = gspread.utils.rowcol_to_a1(len(values), 2)
-        self.worksheet.update(range_name=f"A1:{end}", values=values)
+    async def add_games(self, games: list[dict]) -> dict:
+        """Nimmt neue Spiele mit 0 Votes in das Blatt auf.
+
+        ``games``: ``[{"name": ..., "system": ..., "notes": ...}]``; ``system``
+        (Plattform) und ``notes`` (Besonderheiten) sind optional und landen in
+        den Spalten mit der passenden Überschrift (siehe ``SYSTEM_HEADERS`` /
+        ``NOTES_HEADERS``). Fehlt eine solche Spalte und ist ein Wert angegeben,
+        wird sie rechts angelegt.
+
+        Gibt ``{"added": [...], "existing": [...]}`` zurück. Ein Spiel gilt als
+        vorhanden, wenn sein Name ohne Beachtung der Groß-/Kleinschreibung schon
+        im Blatt steht; ``existing`` nennt dann die Schreibweise aus dem Blatt.
+        Das Blatt bleibt wie nach einem Vote sortiert (Votes absteigend, dann
+        Name), neue Spiele landen also alphabetisch zwischen den 0-Vote-Spielen."""
+        wanted = []
+        for g in games:
+            name = str(g.get("name") or "").strip()
+            if name:
+                wanted.append((name, str(g.get("system") or "").strip(),
+                               str(g.get("notes") or "").strip()))
+
+        def _do():
+            header, rows, _clean, used_rows = self._read_table()
+            header = list(header)
+
+            def column(aliases: tuple[str, ...], title: str, needed: bool) -> int | None:
+                """Index der Spalte mit einer der Überschriften; legt sie bei Bedarf an."""
+                for i, h in enumerate(header):
+                    if i >= 2 and str(h).strip().casefold() in aliases:
+                        return i
+                if not needed:
+                    return None
+                while len(header) < 2:
+                    header.append("")
+                header.append(title)
+                return len(header) - 1
+
+            known = {r[1].casefold(): r[1] for r in rows}
+            added, existing, new_rows = [], [], []
+            for name, system, notes in wanted:
+                key = name.casefold()
+                if key in known:
+                    if known[key] not in existing and known[key] not in added:
+                        existing.append(known[key])
+                    continue
+                known[key] = name
+                added.append(name)
+                new_rows.append((name, system, notes))
+
+            if not added:
+                return added, existing, None
+
+            sys_col = column(SYSTEM_HEADERS, SYSTEM_COLUMN, any(s for _, s, _ in new_rows))
+            notes_col = column(NOTES_HEADERS, NOTES_COLUMN, any(n for _, _, n in new_rows))
+            width = max([2, len(header)] + [len(r) for r in rows])
+            rows = [r + [""] * (width - len(r)) for r in rows]
+            for name, system, notes in new_rows:
+                row = [0, name] + [""] * (width - 2)
+                if sys_col is not None:
+                    row[sys_col] = system
+                if notes_col is not None:
+                    row[notes_col] = notes
+                rows.append(row)
+
+            # Zeilen anhängen (erweitert bei Bedarf das Blatt), dann alles
+            # sortiert zurückschreiben und übrig gebliebene Restzeilen leeren.
+            self.worksheet.append_rows([[0, n] for n in added])
+            new_sorted = self._sorted(rows)
+            self._write_table(header, new_sorted,
+                              clear_rows=used_rows + len(added) - len(new_sorted))
+            return added, existing, new_sorted
+
+        async with self._lock:
+            added, existing, new_sorted = await asyncio.to_thread(_do)
+            if new_sorted is not None:
+                self._after_write(new_sorted)
+        for name in added:
+            log.info("Neues Spiel ins Sheet aufgenommen: %s", name)
+        return {"added": added, "existing": existing}
 
     async def test_connection(self, cfg: dict) -> dict:
         """Prüft Zugriff ohne dauerhaften State. Für den 'Verbindung testen'-Button."""
